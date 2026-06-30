@@ -96,9 +96,12 @@ vmiss-monitor monitor
 脚本只做合规处理：
 
 - 检测到 Cloudflare 页面后发送通知。
-- 等待你在可见浏览器中手动验证。
+- 如果 `HEADLESS=true`，会立即报错要求改为 `HEADLESS=false`。
+- 如果 `HEADLESS=false`，会把浏览器页面置前，并等待你在可见浏览器中手动点击验证。
 - 验证完成后继续监控。
 - 等待超过 `CLOUDFLARE_WAIT_SECONDS` 会报错并在下一轮重试。
+
+脚本不会自动点击或绕过 Cloudflare 真人认证控件。
 
 ## 测试
 

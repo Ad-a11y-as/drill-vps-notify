@@ -23,6 +23,16 @@ class CheckResult:
     message: str
 
 
+def prepare_manual_cloudflare_verification(page, headless: bool) -> str:
+    if headless:
+        raise RuntimeError("Cloudflare 真人认证需要人工点击，请设置 HEADLESS=false 后重试。")
+    try:
+        page.bring_to_front()
+    except Exception:
+        pass
+    return "检测到 Cloudflare 真人认证，请在打开的浏览器窗口中手动点击并完成验证。"
+
+
 class VmissMonitor:
     def __init__(self, config: AppConfig, notifier: MessageNotifier) -> None:
         self._config = config
@@ -99,7 +109,9 @@ class VmissMonitor:
         if not self._wait_until_cloudflare_or_product(page):
             return
 
-        self._safe_notify("VMISS 触发 Cloudflare 真人认证，请在打开的浏览器中手动完成验证。")
+        message = prepare_manual_cloudflare_verification(page, self._config.headless)
+        print(message, flush=True)
+        self._safe_notify(f"VMISS 触发 Cloudflare 真人认证：{message}")
         deadline = time.time() + self._config.cloudflare_wait_seconds
         while time.time() < deadline:
             if not self._looks_like_cloudflare(page):
@@ -246,7 +258,7 @@ class VmissPublicChecker:
         if not self._wait_until_cloudflare_or_product(page):
             return
 
-        print("检测到 Cloudflare 真人认证，请在打开的浏览器中手动完成验证。", flush=True)
+        print(prepare_manual_cloudflare_verification(page, self._config.headless), flush=True)
         deadline = time.time() + self._config.cloudflare_wait_seconds
         while time.time() < deadline:
             try:
