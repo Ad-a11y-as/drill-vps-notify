@@ -49,8 +49,16 @@ uv run python -m playwright install-deps chromium
 
 复制 `.env.example` 为 `.env`，然后填写真实值：
 
+Windows:
+
 ```powershell
 Copy-Item .env.example .env
+```
+
+macOS / Linux:
+
+```bash
+cp .env.example .env
 ```
 
 核心配置：
@@ -78,9 +86,11 @@ TOKEN_REFRESH_AFTER_SECONDS=6600
 
 ## 使用
 
+以下命令在 Windows PowerShell、macOS Terminal、Linux shell 中相同。Windows 如果没有激活虚拟环境，也可以在命令前加 `uv run`，例如 `uv run vmiss-monitor public-check`。
+
 首次使用建议先初始化登录态：
 
-```powershell
+```bash
 vmiss-monitor login
 ```
 
@@ -88,19 +98,19 @@ vmiss-monitor login
 
 发送测试通知：
 
-```powershell
+```bash
 vmiss-monitor test-notify
 ```
 
 执行一次库存检查：
 
-```powershell
+```bash
 vmiss-monitor once
 ```
 
 只测试公开页面监测是否能定位套餐并判断库存，不登录、不通知、不点击下单：
 
-```powershell
+```bash
 vmiss-monitor public-check
 ```
 
@@ -108,7 +118,7 @@ vmiss-monitor public-check
 
 持续监控：
 
-```powershell
+```bash
 vmiss-monitor monitor
 ```
 
@@ -122,7 +132,7 @@ vmiss-monitor monitor
 
 ## 测试
 
-```powershell
+```bash
 uv run python -m unittest discover -s tests -v
 uv run python -m compileall src tests
 ```
@@ -130,5 +140,6 @@ uv run python -m compileall src tests
 ## 注意
 
 - 建议保持 `HEADLESS=false`，方便处理登录和 Cloudflare。
+- macOS / Linux 桌面环境同样建议保持 `HEADLESS=false`；如果是无桌面的 Linux 服务器，需要先配置 X11、Wayland、VNC 或其他可见浏览器环境，否则无法人工处理 Cloudflare。
 - 脚本点击下单后会停止监控并通知你，不会自动付款。
 - 如果 VMISS 页面结构或按钮文案大幅变化，需要更新 `src/vmiss_notify/browser.py` 中的定位逻辑。
