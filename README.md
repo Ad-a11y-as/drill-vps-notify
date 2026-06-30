@@ -11,7 +11,7 @@ Python 脚本，用 Playwright 监控 VMISS 洛杉矶 CN2 GIA 页面中的 `US.L
 - 监控 `https://app.vmiss.com/store/us-los-angeles-cn2`。
 - 只检查 `US.LA.CN2.Basic`。
 - 识别 `0 Available` / `0 可用` 和不可点击按钮为无货。
-- 有货时点击该套餐卡片内的下单按钮。
+- 有货时点击该套餐卡片内的下单按钮，支持 `Order Now`、`立即订购`、`立即订阅` 等中英文文案。
 - 通过 `.env` 配置消息接口字段。
 - `corpAccessToken` 会缓存，6600 秒后主动续期；如果接口返回更短的 `expiresIn`，会提前 60 秒刷新。
 
@@ -96,7 +96,7 @@ vmiss-monitor monitor
 脚本只做合规处理：
 
 - 检测到 Cloudflare 页面后发送通知。
-- 等待你在可见浏览器中手动验证。
+- 检测到 Cloudflare 页面后发送通知，并把浏览器页面置前，等待你在可见浏览器中手动验证。
 - 验证完成后继续监控。
 - 等待超过 `CLOUDFLARE_WAIT_SECONDS` 会报错并在下一轮重试。
 

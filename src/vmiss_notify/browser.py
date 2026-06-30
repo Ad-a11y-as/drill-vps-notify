@@ -9,7 +9,7 @@ from .notifier import MessageNotifier
 from .stock import StockStatus, assess_stock
 
 
-ORDER_TEXT_RE = re.compile(r"(Order Now|立即订购|立即订購)", re.IGNORECASE)
+ORDER_TEXT_RE = re.compile(r"(Order Now|立即订购|立即订購|立即订阅|立即訂閱|立即订閱)", re.IGNORECASE)
 CLOUDFLARE_TEXT_RE = re.compile(
     r"(Cloudflare|Verify you are human|Checking if the site connection is secure|请完成|真人认证|安全验证|自动程序|请稍候)",
     re.IGNORECASE,
@@ -21,6 +21,13 @@ class CheckResult:
     status: StockStatus
     ordered: bool
     message: str
+
+
+def bring_page_to_front(page) -> None:
+    try:
+        page.bring_to_front()
+    except Exception:
+        pass
 
 
 class VmissMonitor:
@@ -99,7 +106,10 @@ class VmissMonitor:
         if not self._wait_until_cloudflare_or_product(page):
             return
 
-        self._safe_notify("VMISS 触发 Cloudflare 真人认证，请在打开的浏览器中手动完成验证。")
+        bring_page_to_front(page)
+        message = "VMISS 触发 Cloudflare 真人认证，已打开浏览器窗口，请手动点击完成验证。"
+        print(message, flush=True)
+        self._safe_notify(message)
         deadline = time.time() + self._config.cloudflare_wait_seconds
         while time.time() < deadline:
             if not self._looks_like_cloudflare(page):
@@ -152,7 +162,7 @@ class VmissMonitor:
         product = page.get_by_text(self._config.target_product, exact=True).first
         product.wait_for(timeout=30000)
         return product.locator(
-            "xpath=ancestor::*[.//*[contains(normalize-space(.), 'Order Now') or contains(normalize-space(.), '立即订购') or contains(normalize-space(.), '立即订購')]][1]"
+            "xpath=ancestor::*[.//*[contains(normalize-space(.), 'Order Now') or contains(normalize-space(.), '立即订购') or contains(normalize-space(.), '立即订購') or contains(normalize-space(.), '立即订阅') or contains(normalize-space(.), '立即訂閱') or contains(normalize-space(.), '立即订閱')]][1]"
         )
 
     def _find_order_control(self, card):
@@ -246,7 +256,8 @@ class VmissPublicChecker:
         if not self._wait_until_cloudflare_or_product(page):
             return
 
-        print("检测到 Cloudflare 真人认证，请在打开的浏览器中手动完成验证。", flush=True)
+        bring_page_to_front(page)
+        print("检测到 Cloudflare 真人认证，已打开浏览器窗口，请手动点击完成验证。", flush=True)
         deadline = time.time() + self._config.cloudflare_wait_seconds
         while time.time() < deadline:
             try:
@@ -286,7 +297,7 @@ class VmissPublicChecker:
         product = page.get_by_text(self._config.target_product, exact=True).first
         product.wait_for(timeout=30000)
         return product.locator(
-            "xpath=ancestor::*[.//*[contains(normalize-space(.), 'Order Now') or contains(normalize-space(.), '立即订购') or contains(normalize-space(.), '立即订購')]][1]"
+            "xpath=ancestor::*[.//*[contains(normalize-space(.), 'Order Now') or contains(normalize-space(.), '立即订购') or contains(normalize-space(.), '立即订購') or contains(normalize-space(.), '立即订阅') or contains(normalize-space(.), '立即訂閱') or contains(normalize-space(.), '立即订閱')]][1]"
         )
 
     def _find_order_control(self, card):
