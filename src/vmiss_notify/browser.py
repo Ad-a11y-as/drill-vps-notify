@@ -4,14 +4,14 @@ import re
 import time
 from dataclasses import dataclass
 
-from .config import AppConfig
+from .config import AppConfig, PublicCheckConfig
 from .notifier import MessageNotifier
 from .stock import StockStatus, assess_stock
 
 
 ORDER_TEXT_RE = re.compile(r"(Order Now|立即订购|立即订購)", re.IGNORECASE)
 CLOUDFLARE_TEXT_RE = re.compile(
-    r"(Cloudflare|Verify you are human|Checking if the site connection is secure|请完成|真人认证)",
+    r"(Cloudflare|Verify you are human|Checking if the site connection is secure|请完成|真人认证|安全验证|自动程序|请稍候)",
     re.IGNORECASE,
 )
 
@@ -96,7 +96,7 @@ class VmissMonitor:
         return False
 
     def _handle_cloudflare(self, page) -> None:
-        if not self._looks_like_cloudflare(page):
+        if not self._wait_until_cloudflare_or_product(page):
             return
 
         self._safe_notify("VMISS 触发 Cloudflare 真人认证，请在打开的浏览器中手动完成验证。")
@@ -108,11 +108,24 @@ class VmissMonitor:
             time.sleep(5)
         raise RuntimeError("Cloudflare 真人认证等待超时")
 
+    def _wait_until_cloudflare_or_product(self, page) -> bool:
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            if self._looks_like_cloudflare(page):
+                return True
+            try:
+                if page.get_by_text(self._config.target_product, exact=True).first.is_visible(timeout=1000):
+                    return False
+            except Exception:
+                pass
+            time.sleep(1)
+        return self._looks_like_cloudflare(page)
+
     def _looks_like_cloudflare(self, page) -> bool:
         title = ""
         body = ""
         try:
-            title = page.title(timeout=3000)
+            title = page.title()
             body = page.locator("body").inner_text(timeout=3000)
         except Exception:
             return False
@@ -120,7 +133,6 @@ class VmissMonitor:
         return bool(CLOUDFLARE_TEXT_RE.search(content))
 
     def _check_and_order(self, page) -> CheckResult:
-        page.wait_for_load_state("networkidle", timeout=30000)
         card = self._find_product_card(page)
         card_text = card.inner_text(timeout=10000)
         order = self._find_order_control(card)
@@ -190,6 +202,120 @@ class VmissMonitor:
             self._notifier.send_text(content)
         except Exception as exc:
             print(f"发送通知失败：{exc}", flush=True)
+
+
+class VmissPublicChecker:
+    def __init__(self, config: PublicCheckConfig) -> None:
+        self._config = config
+
+    def check_once(self) -> CheckResult:
+        with self._launch_context() as context:
+            page = context.new_page()
+            page.goto(self._config.store_url, wait_until="domcontentloaded")
+            self._handle_cloudflare(page)
+            card = self._find_product_card(page)
+            card_text = card.inner_text(timeout=10000)
+            order = self._find_order_control(card)
+            button_enabled = self._is_order_control_enabled(order)
+            status = assess_stock(card_text, button_enabled=button_enabled)
+            return CheckResult(
+                status=status,
+                ordered=False,
+                message=(
+                    f"{self._config.target_product} 公开检测结果：{status.value}；"
+                    f"按钮可点击：{button_enabled}"
+                ),
+            )
+
+    def _launch_context(self):
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError as exc:
+            raise RuntimeError("Playwright 未安装，请先运行 pip install -r requirements.txt") from exc
+
+        playwright = sync_playwright().start()
+        context = playwright.chromium.launch_persistent_context(
+            user_data_dir=str(self._config.user_data_dir),
+            headless=self._config.headless,
+            viewport={"width": 1280, "height": 900},
+            locale="zh-CN",
+        )
+        return _ContextManager(playwright, context)
+
+    def _handle_cloudflare(self, page) -> None:
+        if not self._wait_until_cloudflare_or_product(page):
+            return
+
+        print("检测到 Cloudflare 真人认证，请在打开的浏览器中手动完成验证。", flush=True)
+        deadline = time.time() + self._config.cloudflare_wait_seconds
+        while time.time() < deadline:
+            try:
+                title = page.title()
+                body = page.locator("body").inner_text(timeout=3000)
+            except Exception:
+                time.sleep(5)
+                continue
+            if not CLOUDFLARE_TEXT_RE.search(f"{title}\n{body}"):
+                print("Cloudflare 真人认证已通过，继续公开检测。", flush=True)
+                return
+            time.sleep(5)
+        raise RuntimeError("Cloudflare 真人认证等待超时")
+
+    def _wait_until_cloudflare_or_product(self, page) -> bool:
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            if self._looks_like_cloudflare(page):
+                return True
+            try:
+                if page.get_by_text(self._config.target_product, exact=True).first.is_visible(timeout=1000):
+                    return False
+            except Exception:
+                pass
+            time.sleep(1)
+        return self._looks_like_cloudflare(page)
+
+    def _looks_like_cloudflare(self, page) -> bool:
+        try:
+            title = page.title()
+            body = page.locator("body").inner_text(timeout=3000)
+        except Exception:
+            return False
+        return bool(CLOUDFLARE_TEXT_RE.search(f"{title}\n{body}"))
+
+    def _find_product_card(self, page):
+        product = page.get_by_text(self._config.target_product, exact=True).first
+        product.wait_for(timeout=30000)
+        return product.locator(
+            "xpath=ancestor::*[.//*[contains(normalize-space(.), 'Order Now') or contains(normalize-space(.), '立即订购') or contains(normalize-space(.), '立即订購')]][1]"
+        )
+
+    def _find_order_control(self, card):
+        by_role_button = card.get_by_role("button", name=ORDER_TEXT_RE)
+        if by_role_button.count() > 0:
+            return by_role_button.first
+        by_role_link = card.get_by_role("link", name=ORDER_TEXT_RE)
+        if by_role_link.count() > 0:
+            return by_role_link.first
+        return card.get_by_text(ORDER_TEXT_RE).first
+
+    def _is_order_control_enabled(self, locator) -> bool:
+        try:
+            if not locator.is_visible(timeout=3000):
+                return False
+            disabled = locator.evaluate(
+                """node => {
+                    const el = node.closest('button,a') || node;
+                    const cls = (el.className || '').toString().toLowerCase();
+                    return Boolean(el.disabled)
+                        || el.getAttribute('aria-disabled') === 'true'
+                        || cls.includes('disabled')
+                        || cls.includes('opacity-50')
+                        || cls.includes('cursor-not-allowed');
+                }"""
+            )
+            return not disabled
+        except Exception:
+            return False
 
 
 class _ContextManager:

@@ -77,6 +77,14 @@ vmiss-monitor test-notify
 vmiss-monitor once
 ```
 
+只测试公开页面监测是否能定位套餐并判断库存，不登录、不通知、不点击下单：
+
+```powershell
+vmiss-monitor public-check
+```
+
+如果该命令提示触发 Cloudflare 真人认证，需要在打开的 Chromium 窗口中手动完成验证；验证通过后命令会继续定位 `US.LA.CN2.Basic` 并输出库存判断结果。这个命令适合在正式监控前做完整性检查。
+
 持续监控：
 
 ```powershell

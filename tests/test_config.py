@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from vmiss_notify.config import AppConfig, ConfigError, parse_bool, parse_env_file
+from vmiss_notify.config import AppConfig, ConfigError, PublicCheckConfig, parse_bool, parse_env_file
 
 
 class ConfigTest(unittest.TestCase):
@@ -78,6 +78,24 @@ MESSAGE_TO_USERS=user1,user2
 
         self.assertIn("VMISS_PASSWORD", str(exc_info.exception))
         self.assertIn("MESSAGE_CLOUD_DOMAIN", str(exc_info.exception))
+
+    def test_public_check_config_does_not_require_login_or_message_values(self):
+        env_file = Path("tmp_test_config.env")
+        self.addCleanup(lambda: env_file.unlink(missing_ok=True))
+        env_file.write_text(
+            """
+VMISS_STORE_URL=https://app.vmiss.com/store/us-los-angeles-cn2
+VMISS_TARGET_PRODUCT=US.LA.CN2.Basic
+HEADLESS=true
+""".strip(),
+            encoding="utf-8",
+        )
+
+        config = PublicCheckConfig.from_env_file(env_file)
+
+        self.assertEqual(config.store_url, "https://app.vmiss.com/store/us-los-angeles-cn2")
+        self.assertEqual(config.target_product, "US.LA.CN2.Basic")
+        self.assertIs(config.headless, True)
 
     def test_parse_bool_accepts_common_values(self):
         cases = [

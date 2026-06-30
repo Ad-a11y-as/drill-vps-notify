@@ -70,6 +70,36 @@ class AppConfig:
         )
 
 
+@dataclass(frozen=True)
+class PublicCheckConfig:
+    store_url: str
+    target_product: str
+    headless: bool
+    user_data_dir: Path
+    cloudflare_wait_seconds: int
+
+    @classmethod
+    def from_env_file(cls, path: Path | str = ".env") -> "PublicCheckConfig":
+        file_values = parse_env_file(Path(path))
+        values = {**file_values, **os.environ}
+        store_url = values.get("VMISS_STORE_URL", "https://app.vmiss.com/store/us-los-angeles-cn2").strip()
+        target_product = values.get("VMISS_TARGET_PRODUCT", "US.LA.CN2.Basic").strip()
+        if not store_url:
+            raise ConfigError("VMISS_STORE_URL must not be empty")
+        if not target_product:
+            raise ConfigError("VMISS_TARGET_PRODUCT must not be empty")
+
+        return cls(
+            store_url=store_url,
+            target_product=target_product,
+            headless=parse_bool(values.get("HEADLESS", "false"), "HEADLESS"),
+            user_data_dir=Path(values.get("PLAYWRIGHT_USER_DATA_DIR", ".browser-profile-public").strip()),
+            cloudflare_wait_seconds=parse_int(
+                values.get("CLOUDFLARE_WAIT_SECONDS", "900"), "CLOUDFLARE_WAIT_SECONDS"
+            ),
+        )
+
+
 def parse_env_file(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}

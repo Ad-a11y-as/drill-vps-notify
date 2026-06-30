@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 
-from .browser import VmissMonitor
-from .config import AppConfig
+from .browser import VmissMonitor, VmissPublicChecker
+from .config import AppConfig, PublicCheckConfig
 from .notifier import MessageNotifier
 
 
@@ -14,12 +14,19 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("login", help="Open browser and initialize persistent login state")
     subparsers.add_parser("monitor", help="Run continuous stock monitor")
     subparsers.add_parser("once", help="Run one stock check")
+    subparsers.add_parser("public-check", help="Check public product page without login, notify, or order click")
     subparsers.add_parser("test-notify", help="Send a test notification")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "public-check":
+        public_config = PublicCheckConfig.from_env_file(args.env_file)
+        result = VmissPublicChecker(public_config).check_once()
+        print(result.message)
+        return 0
+
     config = AppConfig.from_env_file(args.env_file)
     notifier = MessageNotifier(config)
 
