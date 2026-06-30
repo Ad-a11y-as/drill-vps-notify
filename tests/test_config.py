@@ -42,7 +42,7 @@ MESSAGE_TO_USERS=user1,user2
 VMISS_EMAIL=user@example.com
 VMISS_PASSWORD=secret
 VMISS_STORE_URL=https://app.vmiss.com/store/us-los-angeles-cn2
-VMISS_TARGET_PRODUCT=US.LA.CN2.Basic
+VMISS_TARGET_PRODUCT=US.LA.CN2.Elite
 CHECK_INTERVAL_SECONDS=15
 HEADLESS=true
 PLAYWRIGHT_USER_DATA_DIR=.browser-profile
@@ -60,7 +60,7 @@ MESSAGE_TO_USERS=user1,user2
         self.assertEqual(config.vmiss_email, "user@example.com")
         self.assertEqual(config.vmiss_password, "secret")
         self.assertEqual(config.store_url, "https://app.vmiss.com/store/us-los-angeles-cn2")
-        self.assertEqual(config.target_product, "US.LA.CN2.Basic")
+        self.assertEqual(config.target_product, "US.LA.CN2.Elite")
         self.assertEqual(config.check_interval_seconds, 15)
         self.assertIs(config.headless, True)
         self.assertEqual(config.user_data_dir, Path(".browser-profile"))
@@ -85,7 +85,7 @@ MESSAGE_TO_USERS=user1,user2
         env_file.write_text(
             """
 VMISS_STORE_URL=https://app.vmiss.com/store/us-los-angeles-cn2
-VMISS_TARGET_PRODUCT=US.LA.CN2.Basic
+VMISS_TARGET_PRODUCT=US.LA.CN2.Pro
 HEADLESS=true
 """.strip(),
             encoding="utf-8",
@@ -94,8 +94,21 @@ HEADLESS=true
         config = PublicCheckConfig.from_env_file(env_file)
 
         self.assertEqual(config.store_url, "https://app.vmiss.com/store/us-los-angeles-cn2")
-        self.assertEqual(config.target_product, "US.LA.CN2.Basic")
+        self.assertEqual(config.target_product, "US.LA.CN2.Pro")
         self.assertIs(config.headless, True)
+
+    def test_public_check_config_requires_target_product(self):
+        env_file = Path("tmp_test_config.env")
+        self.addCleanup(lambda: env_file.unlink(missing_ok=True))
+        env_file.write_text(
+            "VMISS_STORE_URL=https://app.vmiss.com/store/us-los-angeles-cn2\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(ConfigError) as exc_info:
+            PublicCheckConfig.from_env_file(env_file)
+
+        self.assertIn("VMISS_TARGET_PRODUCT", str(exc_info.exception))
 
     def test_parse_bool_accepts_common_values(self):
         cases = [

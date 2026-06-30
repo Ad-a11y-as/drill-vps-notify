@@ -83,7 +83,7 @@ class PublicCheckConfig:
         file_values = parse_env_file(Path(path))
         values = {**file_values, **os.environ}
         store_url = values.get("VMISS_STORE_URL", "https://app.vmiss.com/store/us-los-angeles-cn2").strip()
-        target_product = values.get("VMISS_TARGET_PRODUCT", "US.LA.CN2.Basic").strip()
+        target_product = values.get("VMISS_TARGET_PRODUCT", "").strip()
         if not store_url:
             raise ConfigError("VMISS_STORE_URL must not be empty")
         if not target_product:

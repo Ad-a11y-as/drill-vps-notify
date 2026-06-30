@@ -1,6 +1,6 @@
 # drill-vps-notify
 
-Python 脚本，用 Playwright 监控 VMISS 洛杉矶 CN2 GIA 页面中的 `US.LA.CN2.Basic` 套餐。检测到补货后会点击“立即订购 / Order Now”，并通过企业消息接口发送通知。
+Python 脚本，用 Playwright 监控 VMISS 洛杉矶 CN2 GIA 页面中 `.env` 配置的套餐。检测到补货后会点击“立即订购 / Order Now”，并通过企业消息接口发送通知。
 
 脚本不会绕过 Cloudflare 真人认证，也不会自动付款。遇到真人认证时，会发送通知并等待你在打开的浏览器里手动完成。
 
@@ -9,7 +9,7 @@ Python 脚本，用 Playwright 监控 VMISS 洛杉矶 CN2 GIA 页面中的 `US.L
 - 使用 VMISS 账号密码登录。
 - 使用 Playwright 持久化浏览器目录保存登录态。
 - 监控 `https://app.vmiss.com/store/us-los-angeles-cn2`。
-- 只检查 `US.LA.CN2.Basic`。
+- 通过 `VMISS_TARGET_PRODUCT` 配置要检查的套餐，例如 `US.LA.CN2.Basic`、`US.LA.CN2.Pro`、`US.LA.CN2.Elite`。
 - 识别 `0 Available` / `0 可用` 和不可点击按钮为无货。
 - 有货时点击该套餐卡片内的下单按钮，支持 `Order Now`、`立即订购`、`立即订阅` 等中英文文案。
 - 通过 `.env` 配置消息接口字段。
@@ -83,7 +83,7 @@ vmiss-monitor once
 vmiss-monitor public-check
 ```
 
-如果该命令提示触发 Cloudflare 真人认证，需要在打开的 Chromium 窗口中手动完成验证；验证通过后命令会继续定位 `US.LA.CN2.Basic` 并输出库存判断结果。这个命令适合在正式监控前做完整性检查。
+如果该命令提示触发 Cloudflare 真人认证，需要在打开的 Chromium 窗口中手动完成验证；验证通过后命令会继续定位 `VMISS_TARGET_PRODUCT` 指定的套餐并输出库存判断结果。这个命令适合在正式监控前做完整性检查。
 
 持续监控：
 

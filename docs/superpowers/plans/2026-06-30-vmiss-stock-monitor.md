@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a Python Playwright monitor that logs into VMISS, watches `US.LA.CN2.Basic`, clicks order when available, and sends configured text notifications.
+**Goal:** Build a Python Playwright monitor that logs into VMISS, watches the `VMISS_TARGET_PRODUCT` configured product, clicks order when available, and sends configured text notifications.
 
 **Architecture:** Keep browser automation separate from pure business logic. Test configuration loading, notification transport, and stock rules without launching a browser. Use a persistent Playwright profile to retain login and manual Cloudflare verification state.
 

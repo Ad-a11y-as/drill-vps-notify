@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a Python monitor for `US.LA.CN2.Basic` on `https://app.vmiss.com/store/us-los-angeles-cn2`. When the product becomes available, the script clicks the order button and sends a text notification.
+Build a Python monitor for the product configured by `VMISS_TARGET_PRODUCT` on `https://app.vmiss.com/store/us-los-angeles-cn2`. When the product becomes available, the script clicks the order button and sends a text notification.
 
 ## Constraints
 
