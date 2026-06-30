@@ -1,0 +1,63 @@
+1、调用接口获取AccessToken和corpId
+请求方式：POST + application/json
+
+请求路径：https://${填入所在云的域名}/cgi/corpAccessToken/get/V2?thirdTraceId=${随机字符串}
+
+{
+  "appId":"APPID",
+  "appSecret":"APPSECRET",
+  "permanentCode":"PERMANETCODE"
+}
+
+参数	必须	说明
+errorCode	是	返回码
+errorMessage	是	对返回码的文本描述内容
+corpAccessToken	是	企业应用访问公司合法性凭证
+corpId	是	开放平台派发的公司帐号
+expiresIn	是	企业应用访问公司合法性凭证的过期时间，单位为秒，取值在0~7200之间，在过期时间在0-6600之间请求该接口会返回相同的corpAccessToken，在6600-7200之间请求该接口会返回新的token，如果要续期token，则需要在该时刻进行请求。
+
+2、发送文本消息
+描述
+发送文本消息
+
+请求说明
+请求方式：POST + application/json
+
+请求路径：https://${填入所在云的域名}/cgi/message/send?thirdTraceId=${随机字符串}
+
+请求头填写 ：参考公共参数填写
+
+请求参数
+参数	类型	是否必填	说明
+toUser	List	是	开放平台员工ID列表（消息接收者，目前最多支持500人）
+msgType	String	是	消息类型，取值为：text
+text	Map	否	二级对象，文本内容详情
+&ensp: content	String	是	文本消息内容
+请求示例
+
+{
+   "toUser":[
+      "TOUSER1",
+      "TOUSER2"
+   ],
+   "msgType":"text",
+   "text":{
+      "content":"这是一条文本消息"
+   }
+}
+返回参数
+参数	类型	说明
+traceId	string	请求唯一ID
+errorDescription	string	错误描述
+errorMessage	string	错误信息
+errorCode	Int	查看错误码
+返回示例
+
+{
+  "traceId": "E-O.827xxxxxx",
+  "errorDescription": "success",
+  "errorMessage": "OK",
+  "errorCode": 0
+}
+注意事项
+不能使用返回值的message字段做逻辑判断，errorMessage会有变化；
