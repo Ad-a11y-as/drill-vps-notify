@@ -23,6 +23,18 @@ class CheckResult:
     message: str
 
 
+class LoginStateNotifier:
+    def __init__(self, notifier: MessageNotifier) -> None:
+        self._notifier = notifier
+        self._sent = False
+
+    def notify_success(self, target_product: str) -> None:
+        if self._sent:
+            return
+        self._notifier.send_text(f"VMISS 登录成功，开始监控：{target_product}")
+        self._sent = True
+
+
 def bring_page_to_front(page) -> None:
     try:
         page.bring_to_front()
@@ -34,6 +46,7 @@ class VmissMonitor:
     def __init__(self, config: AppConfig, notifier: MessageNotifier) -> None:
         self._config = config
         self._notifier = notifier
+        self._login_notifier = LoginStateNotifier(notifier)
 
     def setup_login(self) -> None:
         with self._launch_context() as context:
@@ -41,6 +54,7 @@ class VmissMonitor:
             page.goto(self._config.store_url, wait_until="domcontentloaded")
             self._handle_cloudflare(page)
             self._ensure_logged_in(page)
+            self._login_notifier.notify_success(self._config.target_product)
             input("请在打开的浏览器中确认已经登录，然后按 Enter 结束登录初始化...")
 
     def run_once(self) -> CheckResult:
@@ -90,6 +104,7 @@ class VmissMonitor:
             page.wait_for_load_state("domcontentloaded", timeout=30000)
             self._handle_cloudflare(page)
             page.goto(self._config.store_url, wait_until="domcontentloaded")
+        self._login_notifier.notify_success(self._config.target_product)
 
     def _is_login_form_visible(self, page) -> bool:
         for selector in LOGIN_EMAIL_SELECTORS:
