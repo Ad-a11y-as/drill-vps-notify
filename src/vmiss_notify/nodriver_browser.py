@@ -26,6 +26,8 @@ LOGIN_BUTTON_SELECTORS = ['button[type="submit"]', 'input[type="submit"]']
 CLOUDFLARE_CHECKBOX_SELECTORS = ['input[type="checkbox"]', 'label input[type="checkbox"]']
 CLOUDFLARE_CHECKBOX_XPATHS = ['//input[@type="checkbox"]', '//label//input[@type="checkbox"]']
 CLOUDFLARE_RECHECK_SECONDS = 20
+BROWSER_ACTION_TIMEOUT_SECONDS = 15
+PAGE_RENDER_WAIT_SECONDS = 3
 SCRIPT_STYLE_RE = re.compile(r"<(script|style|noscript)\b[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
 HTML_TAG_RE = re.compile(r"<[^>]+>")
 
@@ -98,6 +100,7 @@ class NodriverMonitor:
             tab = await browser.get(self._config.store_url)
             while True:
                 try:
+                    _log("开始一轮库存检查。")
                     await self._handle_cloudflare(tab)
                     await self._ensure_logged_in(tab)
                     result = await self._check_and_order(tab)
@@ -108,6 +111,7 @@ class NodriverMonitor:
                     message = "服务监控异常"
                     print(message, flush=True)
                     self._safe_notify(message)
+                _log(f"等待 {self._config.check_interval_seconds} 秒后刷新页面。")
                 await self._async_sleep(self._config.check_interval_seconds)
                 tab = await self._reload_tab(tab, self._config.store_url)
         finally:
@@ -135,11 +139,14 @@ class NodriverMonitor:
         self._safe_notify("服务验证重启，监控继续运行。")
 
     async def _looks_like_cloudflare(self, tab) -> bool:
+        _log("开始检测 Cloudflare。")
         try:
             content = await _visible_text_or_content(tab)
-        except Exception:
+        except Exception as exc:
+            _log(f"Cloudflare 检测异常：{exc}")
             return False
         matched = bool(CLOUDFLARE_TEXT_RE.search(content))
+        _log(f"Cloudflare 检测结果：{'命中' if matched else '未命中'}。")
         if matched:
             await _click_cloudflare_checkbox_if_present(tab)
         return matched
@@ -147,8 +154,10 @@ class NodriverMonitor:
     async def _wait_until_cloudflare_cleared(self, tab) -> None:
         max_checks = max(1, (self._config.cloudflare_wait_seconds + CLOUDFLARE_RECHECK_SECONDS - 1) // CLOUDFLARE_RECHECK_SECONDS)
         for _ in range(max_checks):
+            _log(f"等待 {CLOUDFLARE_RECHECK_SECONDS} 秒后重新检测 Cloudflare。")
             await self._async_sleep(CLOUDFLARE_RECHECK_SECONDS)
             if not await self._looks_like_cloudflare(tab):
+                _log("Cloudflare 验证已通过。")
                 return
             print("仍在等待 Cloudflare 验证完成。", flush=True)
         raise RuntimeError("Cloudflare 真人认证等待超时")
@@ -188,12 +197,22 @@ class NodriverMonitor:
         return CheckResult(status=status, ordered=True, message=message)
 
     async def _reload_tab(self, tab, url: str):
+        _log("准备刷新页面。")
         if hasattr(tab, "reload"):
-            await _maybe_await(tab.reload())
+            await _await_browser_action(tab.reload(), "刷新页面")
+            _log("页面刷新完成。")
+            _log(f"等待页面渲染 {PAGE_RENDER_WAIT_SECONDS} 秒。")
+            await self._async_sleep(PAGE_RENDER_WAIT_SECONDS)
+            _log("页面渲染等待结束。")
             return tab
         if hasattr(tab, "get"):
-            await _maybe_await(tab.get(url))
-            return tab
+            new_tab = await _await_browser_action(tab.get(url), "重新打开页面")
+            _log("页面重新打开完成。")
+            _log(f"等待页面渲染 {PAGE_RENDER_WAIT_SECONDS} 秒。")
+            await self._async_sleep(PAGE_RENDER_WAIT_SECONDS)
+            _log("页面渲染等待结束。")
+            return new_tab or tab
+        _log("当前 tab 不支持刷新或重新打开页面。")
         return tab
 
     async def _stop_browser(self, browser) -> None:
@@ -260,11 +279,14 @@ class NodriverPublicChecker:
             await _call_if_exists(browser, "stop")
 
     async def _looks_like_cloudflare(self, tab) -> bool:
+        _log("开始检测 Cloudflare。")
         try:
             content = await _visible_text_or_content(tab)
-        except Exception:
+        except Exception as exc:
+            _log(f"Cloudflare 检测异常：{exc}")
             return False
         matched = bool(CLOUDFLARE_TEXT_RE.search(content))
+        _log(f"Cloudflare 检测结果：{'命中' if matched else '未命中'}。")
         if matched:
             await _click_cloudflare_checkbox_if_present(tab)
         return matched
@@ -272,8 +294,10 @@ class NodriverPublicChecker:
     async def _wait_until_cloudflare_cleared(self, tab) -> None:
         max_checks = max(1, (self._config.cloudflare_wait_seconds + CLOUDFLARE_RECHECK_SECONDS - 1) // CLOUDFLARE_RECHECK_SECONDS)
         for _ in range(max_checks):
+            _log(f"等待 {CLOUDFLARE_RECHECK_SECONDS} 秒后重新检测 Cloudflare。")
             await self._async_sleep(CLOUDFLARE_RECHECK_SECONDS)
             if not await self._looks_like_cloudflare(tab):
+                _log("Cloudflare 验证已通过。")
                 return
             print("仍在等待 Cloudflare 验证完成。", flush=True)
         raise RuntimeError("Cloudflare 真人认证等待超时")
@@ -302,15 +326,21 @@ async def _find_first_order_control(tab):
 
 
 async def _visible_text_or_content(tab) -> str:
+    _log("准备读取页面可见文本。")
     evaluate = getattr(tab, "evaluate", None)
     if evaluate is not None:
         try:
-            text = await _maybe_await(evaluate("document.body ? document.body.innerText : ''"))
+            text = await _await_browser_action(evaluate("document.body ? document.body.innerText : ''"), "读取页面可见文本")
         except Exception:
             text = None
         if isinstance(text, str) and text.strip():
+            _log(f"页面可见文本读取完成，长度 {len(text)}。")
             return text
-    return _html_to_visible_text(await tab.get_content())
+        _log("页面可见文本为空，回退读取页面 HTML。")
+    _log("准备读取页面 HTML。")
+    content = await _await_browser_action(tab.get_content(), "读取页面 HTML")
+    _log(f"页面 HTML 读取完成，长度 {len(content)}。")
+    return _html_to_visible_text(content)
 
 
 def _html_to_visible_text(content: str) -> str:
@@ -320,19 +350,19 @@ def _html_to_visible_text(content: str) -> str:
 
 
 async def _click_cloudflare_checkbox_if_present(tab) -> None:
-    print("准备查找 Cloudflare checkbox。", flush=True)
+    _log("准备查找 Cloudflare checkbox。")
     element = await _first_selected(tab, CLOUDFLARE_CHECKBOX_SELECTORS)
     if element is None:
         element = await _first_xpath(tab, CLOUDFLARE_CHECKBOX_XPATHS)
     if element is None:
-        print("未找到 Cloudflare checkbox。", flush=True)
+        _log("未找到 Cloudflare checkbox。")
         return
-    print("找到 Cloudflare checkbox，准备点击。", flush=True)
+    _log("找到 Cloudflare checkbox，准备点击。")
     try:
-        await element.click()
-        print("已点击 Cloudflare checkbox。", flush=True)
+        await _await_browser_action(element.click(), "点击 Cloudflare checkbox")
+        _log("已点击 Cloudflare checkbox。")
     except Exception as exc:
-        print(f"点击 Cloudflare checkbox 异常：{exc}", flush=True)
+        _log(f"点击 Cloudflare checkbox 异常：{exc}")
         return
 
 
@@ -364,11 +394,26 @@ async def _maybe_await(value):
     return value
 
 
+async def _await_browser_action(value, action: str, timeout_seconds: int = BROWSER_ACTION_TIMEOUT_SECONDS):
+    try:
+        return await asyncio.wait_for(_maybe_await(value), timeout=timeout_seconds)
+    except asyncio.TimeoutError:
+        _log(f"{action}超时（{timeout_seconds} 秒）。")
+        raise
+    except Exception as exc:
+        _log(f"{action}异常：{exc}")
+        raise
+
+
 async def _call_if_exists(target, method_name: str) -> None:
     method = getattr(target, method_name, None)
     if method is None:
         return
     await _maybe_await(method())
+
+
+def _log(message: str) -> None:
+    print(f"{_current_timestamp()} {message}", flush=True)
 
 
 def _current_timestamp() -> str:
