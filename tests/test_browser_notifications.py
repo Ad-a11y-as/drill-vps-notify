@@ -65,7 +65,7 @@ class LoginStateNotifierTest(unittest.TestCase):
         login_notifier.notify_success("US.LA.CN2.Pro")
         login_notifier.notify_success("US.LA.CN2.Pro")
 
-        self.assertEqual(notifier.messages, ["VMISS 登录成功，开始监控：US.LA.CN2.Pro"])
+        self.assertEqual(notifier.messages, ["服务监控开始"])
 
 
 class VmissMonitorNotificationTest(unittest.TestCase):
@@ -76,6 +76,77 @@ class VmissMonitorNotificationTest(unittest.TestCase):
         monitor.monitor_forever()
 
         self.assertTrue(monitor.run_once_called)
+
+    def test_monitor_startup_notification_does_not_expose_service_name_or_product(self):
+        notifier = FakeNotifier()
+        monitor = OneShotMonitor(make_config(), notifier)
+
+        monitor.monitor_forever()
+
+        self.assertIn("服务监控开始", notifier.messages)
+        for message in notifier.messages:
+            self.assertNotIn("VMISS", message)
+            self.assertNotIn("US.LA.CN2.Basic", message)
+
+    def test_available_notification_is_generic(self):
+        notifier = FakeNotifier()
+        monitor = VmissMonitor(make_config(), notifier)
+
+        result = monitor._check_and_order(FakeAvailablePage())
+
+        self.assertTrue(result.ordered)
+        self.assertEqual(result.message, "服务可达")
+        self.assertEqual(notifier.messages, ["服务可达"])
+
+class FakeAvailablePage:
+    def wait_for_load_state(self, state, timeout=None):
+        return None
+
+    def get_by_text(self, text, exact=False):
+        return FakeProductLocator()
+
+
+class FakeProductLocator:
+    @property
+    def first(self):
+        return self
+
+    def wait_for(self, timeout=None):
+        return None
+
+    def locator(self, selector):
+        return FakeProductCard()
+
+
+class FakeProductCard:
+    def inner_text(self, timeout=None):
+        return "US.LA.CN2.Basic\n1 Available\nOrder Now"
+
+    def get_by_role(self, role, name=None):
+        return FakeEmptyLocator()
+
+    def get_by_text(self, text):
+        return FakeOrderLocator()
+
+
+class FakeEmptyLocator:
+    def count(self):
+        return 0
+
+
+class FakeOrderLocator:
+    @property
+    def first(self):
+        return self
+
+    def is_visible(self, timeout=None):
+        return True
+
+    def evaluate(self, script):
+        return False
+
+    def click(self, timeout=None):
+        return None
 
 
 if __name__ == "__main__":

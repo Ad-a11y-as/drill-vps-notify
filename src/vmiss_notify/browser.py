@@ -31,7 +31,7 @@ class LoginStateNotifier:
     def notify_success(self, target_product: str) -> None:
         if self._sent:
             return
-        self._notifier.send_text(f"VMISS 登录成功，开始监控：{target_product}")
+        self._notifier.send_text("服务监控开始")
         self._sent = True
 
 
@@ -89,9 +89,7 @@ class VmissMonitor:
             return self._check_and_order(page)
 
     def monitor_forever(self) -> None:
-        self._safe_notify(
-            f"VMISS 库存监控已启动：{self._config.target_product}，间隔 {self._config.check_interval_seconds} 秒"
-        )
+        self._safe_notify("服务监控开始")
         while True:
             try:
                 result = self.run_once()
@@ -99,7 +97,7 @@ class VmissMonitor:
                 if result.ordered:
                     return
             except Exception as exc:
-                message = f"VMISS 库存监控异常：{type(exc).__name__}: {exc}"
+                message = f"服务监控异常：{type(exc).__name__}: {exc}"
                 print(message, flush=True)
                 self._safe_notify(message)
             time.sleep(self._config.check_interval_seconds)
@@ -141,13 +139,13 @@ class VmissMonitor:
             return
 
         bring_page_to_front(page)
-        message = "VMISS 触发 Cloudflare 真人认证，已打开浏览器窗口，请手动点击完成验证。"
+        message = "服务需要人工验证，已打开浏览器窗口，请手动完成。"
         print(message, flush=True)
         self._safe_notify(message)
         deadline = time.time() + self._config.cloudflare_wait_seconds
         while time.time() < deadline:
             if not self._looks_like_cloudflare(page):
-                self._safe_notify("VMISS Cloudflare 真人认证已通过，监控继续运行。")
+                self._safe_notify("服务人工验证已通过，监控继续运行。")
                 return
             time.sleep(5)
         raise RuntimeError("Cloudflare 真人认证等待超时")
@@ -190,7 +188,7 @@ class VmissMonitor:
 
         order.click(timeout=10000)
         page.wait_for_load_state("domcontentloaded", timeout=30000)
-        message = f"{self._config.target_product} 已检测到库存并点击下单，请尽快人工确认后续页面。"
+        message = "服务可达"
         self._notifier.send_text(message)
         return CheckResult(status=status, ordered=True, message=message)
 

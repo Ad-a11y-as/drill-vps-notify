@@ -31,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     notifier = MessageNotifier(config)
 
     if args.command == "test-notify":
-        notifier.send_text("VMISS 库存监控测试通知")
+        notifier.send_text("服务监控测试通知")
         print("测试通知已发送")
         return 0
 
