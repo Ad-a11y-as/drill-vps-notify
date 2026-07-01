@@ -69,6 +69,7 @@ cp .env.example .env
 | --- | --- | --- | --- |
 | `public-check` | 需要 | `VMISS_TARGET_PRODUCT` | 只访问公开商品页，不登录、不通知、不下单。`VMISS_STORE_URL` 可不填，会默认使用洛杉矶 CN2 页面。 |
 | `login` | 需要 | `VMISS_EMAIL`、`VMISS_PASSWORD`、`VMISS_STORE_URL`、`VMISS_TARGET_PRODUCT`、消息接口字段 | 会登录 VMISS；如果遇到 Cloudflare，会发送消息通知。 |
+| `hybrid-login` | 需要 | `VMISS_EMAIL`、`VMISS_PASSWORD`、`VMISS_STORE_URL`、`VMISS_TARGET_PRODUCT`、消息接口字段 | 先用 SeleniumBase 打开同一个浏览器资料目录供你人工验证，再交给 Playwright 初始化登录态。 |
 | `once` | 需要 | `VMISS_EMAIL`、`VMISS_PASSWORD`、`VMISS_STORE_URL`、`VMISS_TARGET_PRODUCT`、消息接口字段 | 检测一次库存；有货会点击下单并发送通知。 |
 | `monitor` | 需要 | `VMISS_EMAIL`、`VMISS_PASSWORD`、`VMISS_STORE_URL`、`VMISS_TARGET_PRODUCT`、消息接口字段 | 持续监控；启动、Cloudflare、异常、有货下单都会用到通知。 |
 | `test-notify` | 需要 | 消息接口字段 | 只测试消息发送，不访问 VMISS。 |
@@ -123,6 +124,14 @@ uv run vmiss-monitor login
 ```
 
 如果出现 Cloudflare 真人认证，在打开的浏览器中手动完成。登录完成后回到终端按 Enter。
+
+如果需要先用 SeleniumBase 打开同一个浏览器资料目录进行人工验证，再交给 Playwright 继续初始化：
+
+```bash
+uv run vmiss-monitor hybrid-login
+```
+
+该模式仍然不会自动绕过 Cloudflare；它只负责把人工验证后的浏览器资料目录交给 Playwright 复用。
 
 发送测试通知：
 

@@ -5,6 +5,7 @@ import argparse
 from .browser import VmissMonitor, VmissPublicChecker
 from .config import AppConfig, PublicCheckConfig
 from .notifier import MessageNotifier
+from .seleniumbase_bridge import run_seleniumbase_manual_verification
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -12,6 +13,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--env-file", default=".env", help="Path to .env file")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("login", help="Open browser and initialize persistent login state")
+    subparsers.add_parser("hybrid-login", help="Use SeleniumBase for manual verification, then initialize Playwright")
     subparsers.add_parser("monitor", help="Run continuous stock monitor")
     subparsers.add_parser("once", help="Run one stock check")
     subparsers.add_parser("public-check", help="Check public product page without login, notify, or order click")
@@ -33,6 +35,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "test-notify":
         notifier.send_text("服务监控测试通知")
         print("测试通知已发送")
+        return 0
+
+    if args.command == "hybrid-login":
+        run_seleniumbase_manual_verification(config)
+        monitor = VmissMonitor(config, notifier)
+        monitor.setup_login()
         return 0
 
     monitor = VmissMonitor(config, notifier)
