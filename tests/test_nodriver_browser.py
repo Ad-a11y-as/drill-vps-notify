@@ -34,6 +34,22 @@ class NodriverBrowserTest(unittest.TestCase):
         self.assertEqual(browser.opened_urls, ["https://app.vmiss.com/store/us-los-angeles-cn2"])
         self.assertTrue(browser.stopped)
 
+    def test_unavailable_result_includes_timestamp(self):
+        notifier = FakeNotifier()
+        browser = FakeBrowser(FakeTab("US.LA.CN2.Basic\n0 Available\nSold Out"))
+        monitor = NodriverMonitor(
+            make_config(),
+            notifier,
+            browser_factory=lambda **kwargs: browser,
+            async_sleep=no_sleep,
+        )
+
+        result = monitor.run_once()
+
+        self.assertFalse(result.ordered)
+        self.assertRegex(result.message, r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} US\.LA\.CN2\.Basic 暂无库存$")
+        self.assertEqual(notifier.messages, [])
+
     def test_monitor_startup_notification_is_generic(self):
         notifier = FakeNotifier()
         browser = FakeBrowser(FakeTab("US.LA.CN2.Basic\n1 Available\nOrder Now"))

@@ -5,6 +5,7 @@ import inspect
 import random
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Awaitable, Callable
 
 from .config import AppConfig, PublicCheckConfig
@@ -158,7 +159,8 @@ class NodriverMonitor:
             status = assess_stock(content, button_enabled=button_enabled)
 
         if status != StockStatus.AVAILABLE:
-            return CheckResult(status=status, ordered=False, message=f"{self._config.target_product} 暂无库存")
+            message = f"{_current_timestamp()} {self._config.target_product} 暂无库存"
+            return CheckResult(status=status, ordered=False, message=message)
 
         await order.click()
         await self._async_sleep(random.uniform(0.8, 1.8))
@@ -282,3 +284,7 @@ async def _call_if_exists(target, method_name: str) -> None:
     if method is None:
         return
     await _maybe_await(method())
+
+
+def _current_timestamp() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
