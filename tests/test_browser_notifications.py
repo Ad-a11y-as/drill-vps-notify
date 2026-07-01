@@ -1,6 +1,7 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -57,6 +58,18 @@ class OneShotMonitor(VmissMonitor):
         return CheckResult(StockStatus.AVAILABLE, ordered=True, message="ordered")
 
 
+class ErrorThenOrderMonitor(VmissMonitor):
+    def __init__(self, config, notifier):
+        super().__init__(config, notifier)
+        self.calls = 0
+
+    def run_once(self):
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("secret backend detail")
+        return CheckResult(StockStatus.AVAILABLE, ordered=True, message="ordered")
+
+
 class LoginStateNotifierTest(unittest.TestCase):
     def test_notify_login_success_once(self):
         notifier = FakeNotifier()
@@ -97,6 +110,35 @@ class VmissMonitorNotificationTest(unittest.TestCase):
         self.assertTrue(result.ordered)
         self.assertEqual(result.message, "服务可达")
         self.assertEqual(notifier.messages, ["服务可达"])
+
+
+    def test_monitor_exception_notification_is_generic(self):
+        notifier = FakeNotifier()
+        monitor = ErrorThenOrderMonitor(make_config(), notifier)
+
+        with patch("vmiss_notify.browser.time.sleep"):
+            monitor.monitor_forever()
+
+        self.assertIn("服务监控异常", notifier.messages)
+        for message in notifier.messages:
+            self.assertNotIn("RuntimeError", message)
+            self.assertNotIn("secret backend detail", message)
+
+    def test_cloudflare_notifications_use_restart_copy(self):
+        notifier = FakeNotifier()
+        monitor = VmissMonitor(make_config(), notifier)
+
+        with patch("vmiss_notify.browser.time.sleep"):
+            monitor._handle_cloudflare(
+                FakeResolvedChallengePage(),
+                FakeResponse(403, "https://app.vmiss.com/store/us-los-angeles-cn2"),
+            )
+
+        self.assertEqual(
+            notifier.messages,
+            ["服务需要验证重启。", "服务验证重启，监控继续运行。"],
+        )
+
 
 class FakeAvailablePage:
     def wait_for_load_state(self, state, timeout=None):
@@ -147,6 +189,28 @@ class FakeOrderLocator:
 
     def click(self, timeout=None):
         return None
+
+
+class FakeResponse:
+    def __init__(self, status, url):
+        self.status = status
+        self.url = url
+
+
+class FakeResolvedChallengePage:
+    def bring_to_front(self):
+        return None
+
+    def title(self):
+        return "Service"
+
+    def locator(self, selector):
+        return FakeClearBodyLocator()
+
+
+class FakeClearBodyLocator:
+    def inner_text(self, timeout=None):
+        return "ready"
 
 
 if __name__ == "__main__":

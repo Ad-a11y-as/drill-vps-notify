@@ -96,8 +96,8 @@ class VmissMonitor:
                 print(result.message, flush=True)
                 if result.ordered:
                     return
-            except Exception as exc:
-                message = f"服务监控异常：{type(exc).__name__}: {exc}"
+            except Exception:
+                message = "服务监控异常"
                 print(message, flush=True)
                 self._safe_notify(message)
             time.sleep(self._config.check_interval_seconds)
@@ -139,13 +139,13 @@ class VmissMonitor:
             return
 
         bring_page_to_front(page)
-        message = "服务需要人工验证，已打开浏览器窗口，请手动完成。"
+        message = "服务需要验证重启。"
         print(message, flush=True)
         self._safe_notify(message)
         deadline = time.time() + self._config.cloudflare_wait_seconds
         while time.time() < deadline:
             if not self._looks_like_cloudflare(page):
-                self._safe_notify("服务人工验证已通过，监控继续运行。")
+                self._safe_notify("服务验证重启，监控继续运行。")
                 return
             time.sleep(5)
         raise RuntimeError("Cloudflare 真人认证等待超时")
