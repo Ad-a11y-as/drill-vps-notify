@@ -7,7 +7,7 @@ name = "drill-vps-notify"
 version = "0.1.0"
 description = "VMISS VPS stock monitor and notifier"
 requires-python = ">=3.10"
-dependencies = ["playwright>=1.45.0", "seleniumbase>=4.30.0"]
+dependencies = ["nodriver>=0.46.0"]
 
 [project.scripts]
 vmiss-monitor = "vmiss_notify.cli:main"

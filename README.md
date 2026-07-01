@@ -1,13 +1,13 @@
 # drill-vps-notify
 
-Python 脚本，用 Playwright 监控 VMISS 洛杉矶 CN2 GIA 页面中 `.env` 配置的套餐。检测到补货后会点击“立即订购 / Order Now”，并通过企业消息接口发送通知。
+Python 脚本，用 Nodriver 监控 VMISS 洛杉矶 CN2 GIA 页面中 `.env` 配置的套餐。检测到补货后会点击“立即订购 / Order Now”，并通过企业消息接口发送通知。
 
 脚本不会绕过 Cloudflare 真人认证，也不会自动付款。遇到真人认证时，会发送通知并等待你在打开的浏览器里手动完成。
 
 ## 功能
 
 - 使用 VMISS 账号密码登录。
-- 使用 Playwright 持久化浏览器目录保存登录态。
+- 使用 Nodriver 有头浏览器，并通过持久化浏览器目录保存登录态。
 - 监控 `https://app.vmiss.com/store/us-los-angeles-cn2`。
 - 通过 `VMISS_TARGET_PRODUCT` 配置要检查的套餐，例如 `US.LA.CN2.Basic`、`US.LA.CN2.Pro`、`US.LA.CN2.Elite`。
 - 识别 `0 Available` / `0 可用` 和不可点击按钮为无货。
@@ -28,7 +28,6 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 uv venv
 .\.venv\Scripts\Activate.ps1
 uv pip install -e .
-uv run python -m playwright install chromium
 ```
 
 ### macOS / Linux
@@ -38,13 +37,6 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv venv
 source .venv/bin/activate
 uv pip install -e .
-uv run python -m playwright install chromium
-```
-
-Linux 如果运行浏览器时报缺少系统依赖，可再执行：
-
-```bash
-uv run python -m playwright install-deps chromium
 ```
 
 ## 配置
@@ -69,7 +61,7 @@ cp .env.example .env
 | --- | --- | --- | --- |
 | `public-check` | 需要 | `VMISS_TARGET_PRODUCT` | 只访问公开商品页，不登录、不通知、不下单。`VMISS_STORE_URL` 可不填，会默认使用洛杉矶 CN2 页面。 |
 | `login` | 需要 | `VMISS_EMAIL`、`VMISS_PASSWORD`、`VMISS_STORE_URL`、`VMISS_TARGET_PRODUCT`、消息接口字段 | 会登录 VMISS；如果遇到 Cloudflare，会发送消息通知。 |
-| `hybrid-login` | 需要 | `VMISS_EMAIL`、`VMISS_PASSWORD`、`VMISS_STORE_URL`、`VMISS_TARGET_PRODUCT`、消息接口字段 | 先用 SeleniumBase 打开同一个浏览器资料目录供你人工验证，再交给 Playwright 初始化登录态。 |
+| `hybrid-login` | 需要 | `VMISS_EMAIL`、`VMISS_PASSWORD`、`VMISS_STORE_URL`、`VMISS_TARGET_PRODUCT`、消息接口字段 | 兼容旧命令名；现在与 `login` 一样使用 Nodriver 初始化登录态。 |
 | `once` | 需要 | `VMISS_EMAIL`、`VMISS_PASSWORD`、`VMISS_STORE_URL`、`VMISS_TARGET_PRODUCT`、消息接口字段 | 检测一次库存；有货会点击下单并发送通知。 |
 | `monitor` | 需要 | `VMISS_EMAIL`、`VMISS_PASSWORD`、`VMISS_STORE_URL`、`VMISS_TARGET_PRODUCT`、消息接口字段 | 持续监控；启动、Cloudflare、异常、有货下单都会用到通知。 |
 | `test-notify` | 需要 | 消息接口字段 | 只测试消息发送，不访问 VMISS。 |
@@ -83,9 +75,9 @@ cp .env.example .env
 | `VMISS_STORE_URL` | `https://app.vmiss.com/store/us-los-angeles-cn2` | `public-check` 可省略；正式登录/监控建议显式保留。 |
 | `VMISS_LOGIN_URL` | `https://app.vmiss.com/login` | VMISS 登录页。 |
 | `CHECK_INTERVAL_SECONDS` | `30` | `monitor` 的轮询间隔。 |
-| `HEADLESS` | `false` | 建议保持 `false`，否则无法人工处理 Cloudflare。 |
-| `PLAYWRIGHT_USER_DATA_DIR` | `.browser-profile` | 浏览器登录态目录。 |
-| `PLAYWRIGHT_BROWSER_CHANNEL` | 空 | 可选，指定已安装的 Chromium 内核浏览器，例如 `chrome` 或 `msedge`；留空时使用 Playwright 自带 Chromium。 |
+| `HEADLESS` | `false` | 当前 Nodriver 命令始终以有头模式启动；该字段仅保留兼容。 |
+| `PLAYWRIGHT_USER_DATA_DIR` | `.browser-profile` | 浏览器登录态目录；字段名保留兼容，Nodriver 会复用这个目录。 |
+| `PLAYWRIGHT_BROWSER_CHANNEL` | 空 | 旧 Playwright 配置字段；当前 Nodriver 命令不使用。 |
 | `CLOUDFLARE_WAIT_SECONDS` | `900` | 等待你人工完成 Cloudflare 的最长秒数。 |
 | `TOKEN_REFRESH_AFTER_SECONDS` | `6600` | 消息接口 token 主动刷新时间。 |
 
@@ -125,13 +117,13 @@ uv run vmiss-monitor login
 
 如果出现 Cloudflare 真人认证，在打开的浏览器中手动完成。登录完成后回到终端按 Enter。
 
-如果需要先用 SeleniumBase 打开同一个浏览器资料目录进行人工验证，再交给 Playwright 继续初始化：
+`hybrid-login` 作为旧命令兼容入口保留，当前也使用 Nodriver：
 
 ```bash
 uv run vmiss-monitor hybrid-login
 ```
 
-该模式仍然不会自动绕过 Cloudflare；它只负责把人工验证后的浏览器资料目录交给 Playwright 复用。
+该模式仍然不会自动绕过 Cloudflare；它只负责打开有头浏览器，等待你人工验证，并把状态保存在同一个浏览器资料目录中。
 
 发送测试通知：
 
@@ -176,7 +168,7 @@ uv run python -m compileall src tests
 
 ## 注意
 
-- 建议保持 `HEADLESS=false`，方便处理登录和 Cloudflare。
-- macOS / Linux 桌面环境同样建议保持 `HEADLESS=false`；如果是无桌面的 Linux 服务器，需要先配置 X11、Wayland、VNC 或其他可见浏览器环境，否则无法人工处理 Cloudflare。
+- Nodriver 命令当前始终使用有头模式，方便处理登录和 Cloudflare。
+- macOS / Linux 桌面环境需要可见浏览器环境；如果是无桌面的 Linux 服务器，需要先配置 X11、Wayland、VNC 或其他可见浏览器环境，否则无法人工处理 Cloudflare。
 - 脚本点击下单后会停止监控并通知你，不会自动付款。
-- 如果 VMISS 页面结构或按钮文案大幅变化，需要更新 `src/vmiss_notify/browser.py` 中的定位逻辑。
+- 如果 VMISS 页面结构或按钮文案大幅变化，需要更新 `src/vmiss_notify/nodriver_browser.py` 中的定位逻辑。
