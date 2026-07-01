@@ -1,5 +1,8 @@
+import asyncio
+import io
 import sys
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -88,7 +91,7 @@ class NodriverBrowserTest(unittest.TestCase):
     def test_cloudflare_requires_manual_confirmation(self):
         notifier = FakeNotifier()
         prompts = []
-        browser = FakeBrowser(FakeTab("Verify you are human"))
+        browser = FakeBrowser(FakeTab(["Verify you are human", "Service ready"]))
         monitor = NodriverMonitor(
             make_config(),
             notifier,
@@ -100,8 +103,112 @@ class NodriverBrowserTest(unittest.TestCase):
         monitor.setup_login()
 
         self.assertEqual(notifier.messages[0], "服务需要验证重启。")
-        self.assertEqual(len(prompts), 2)
-        self.assertIn("手动完成验证", prompts[0])
+        self.assertEqual(len(prompts), 1)
+        self.assertIn("确认已经登录", prompts[0])
+
+    def test_cloudflare_detection_does_not_depend_on_checkbox_xpath(self):
+        monitor = NodriverMonitor(
+            make_config(),
+            FakeNotifier(),
+            browser_factory=lambda **kwargs: FakeBrowser(FakeTab("Verify you are human")),
+            async_sleep=no_sleep,
+        )
+        tab = FakeTab("Verify you are human")
+
+        detected = asyncio.run(monitor._looks_like_cloudflare(tab))
+
+        self.assertTrue(detected)
+
+    def test_cloudflare_detection_clicks_available_checkbox(self):
+        monitor = NodriverMonitor(
+            make_config(),
+            FakeNotifier(),
+            browser_factory=lambda **kwargs: FakeBrowser(FakeTab("Verify you are human")),
+            async_sleep=no_sleep,
+        )
+        tab = FakeTab("Verify you are human", checkbox_selector='input[type="checkbox"]')
+
+        detected = asyncio.run(monitor._looks_like_cloudflare(tab))
+
+        self.assertTrue(detected)
+        self.assertTrue(tab.clicked)
+
+    def test_cloudflare_waits_20_seconds_until_manual_verification_completes(self):
+        notifier = FakeNotifier()
+        prompts = []
+        sleeps = []
+        browser = FakeBrowser(
+            FakeTab(
+                [
+                    "Verify you are human",
+                    "US.LA.CN2.Basic\n1 Available\nOrder Now",
+                ]
+            )
+        )
+        monitor = NodriverMonitor(
+            make_config(),
+            notifier,
+            browser_factory=lambda **kwargs: browser,
+            input_func=lambda prompt: prompts.append(prompt),
+            async_sleep=lambda seconds: record_sleep(sleeps, seconds),
+        )
+
+        result = monitor.run_once()
+
+        self.assertTrue(result.ordered)
+        self.assertEqual(sleeps[0], 20)
+        self.assertEqual(prompts, [])
+        self.assertEqual(
+            notifier.messages,
+            ["服务需要验证重启。", "服务验证重启，监控继续运行。", "服务可达"],
+        )
+
+    def test_cloudflare_resume_is_printed_after_manual_verification_completes(self):
+        notifier = FakeNotifier()
+        browser = FakeBrowser(
+            FakeTab(
+                [
+                    "Verify you are human",
+                    "US.LA.CN2.Basic\n0 Available\nSold Out",
+                ]
+            )
+        )
+        monitor = NodriverMonitor(
+            make_config(),
+            notifier,
+            browser_factory=lambda **kwargs: browser,
+            async_sleep=no_sleep,
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            monitor.run_once()
+
+        self.assertIn("服务验证重启，监控继续运行。", output.getvalue())
+
+    def test_cloudflare_waiting_status_is_printed_between_rechecks(self):
+        notifier = FakeNotifier()
+        browser = FakeBrowser(
+            FakeTab(
+                [
+                    "Verify you are human",
+                    "Verify you are human",
+                    "US.LA.CN2.Basic\n0 Available\nSold Out",
+                ]
+            )
+        )
+        monitor = NodriverMonitor(
+            make_config(),
+            notifier,
+            browser_factory=lambda **kwargs: browser,
+            async_sleep=no_sleep,
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            monitor.run_once()
+
+        self.assertIn("仍在等待 Cloudflare 验证完成。", output.getvalue())
 
 
 class FakeNotifier:
@@ -128,8 +235,10 @@ class FakeBrowser:
 
 
 class FakeTab:
-    def __init__(self, content):
-        self.content = content
+    def __init__(self, content, checkbox_selector=None):
+        self.content_sequence = list(content) if isinstance(content, list) else None
+        self.content = content[0] if isinstance(content, list) else content
+        self.checkbox_selector = checkbox_selector
         self.fail_content_on_call = None
         self.content_calls = 0
         self.clicked = False
@@ -140,6 +249,9 @@ class FakeTab:
         if self.content_calls == self.fail_content_on_call:
             self.fail_content_on_call = None
             raise RuntimeError("secret backend detail")
+        if self.content_sequence:
+            index = min(self.content_calls - 1, len(self.content_sequence) - 1)
+            self.content = self.content_sequence[index]
         return self.content
 
     async def find(self, text, best_match=False):
@@ -148,6 +260,8 @@ class FakeTab:
         return None
 
     async def select(self, selector, timeout=1):
+        if selector == self.checkbox_selector:
+            return FakeElement(self)
         return None
 
     async def reload(self):
@@ -170,6 +284,10 @@ class FakeElement:
 
 async def no_sleep(seconds):
     return None
+
+
+async def record_sleep(sleeps, seconds):
+    sleeps.append(seconds)
 
 
 def make_config():

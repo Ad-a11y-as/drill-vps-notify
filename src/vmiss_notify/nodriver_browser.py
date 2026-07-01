@@ -22,6 +22,8 @@ ORDER_TEXTS = ["Order Now", "立即订购", "立即订購", "立即订阅", "立
 LOGIN_EMAIL_SELECTORS = ['input[type="email"]', 'input[name="email"]', 'input[name="username"]', "#inputEmail", "#email"]
 LOGIN_PASSWORD_SELECTORS = ['input[type="password"]', 'input[name="password"]', "#inputPassword", "#password"]
 LOGIN_BUTTON_SELECTORS = ['button[type="submit"]', 'input[type="submit"]']
+CLOUDFLARE_CHECKBOX_SELECTORS = ['input[type="checkbox"]', 'label input[type="checkbox"]']
+CLOUDFLARE_CHECKBOX_XPATHS = ['//input[@type="checkbox"]', '//label//input[@type="checkbox"]']
 CLOUDFLARE_RECHECK_SECONDS = 20
 
 
@@ -126,16 +128,18 @@ class NodriverMonitor:
         self._safe_notify(message)
         print("请在 Nodriver 浏览器中手动完成验证，程序会每 20 秒自动检查。", flush=True)
         await self._wait_until_cloudflare_cleared(tab)
+        print("服务验证重启，监控继续运行。", flush=True)
         self._safe_notify("服务验证重启，监控继续运行。")
 
     async def _looks_like_cloudflare(self, tab) -> bool:
         try:
             content = await tab.get_content()
-            checkbox = await tab.xpath('//*[@id="KGOjX7"]/div/label/input')
-            await checkbox.click()
         except Exception:
             return False
-        return bool(CLOUDFLARE_TEXT_RE.search(content))
+        matched = bool(CLOUDFLARE_TEXT_RE.search(content))
+        if matched:
+            await _click_cloudflare_checkbox_if_present(tab)
+        return matched
 
     async def _wait_until_cloudflare_cleared(self, tab) -> None:
         max_checks = max(1, (self._config.cloudflare_wait_seconds + CLOUDFLARE_RECHECK_SECONDS - 1) // CLOUDFLARE_RECHECK_SECONDS)
@@ -143,6 +147,7 @@ class NodriverMonitor:
             await self._async_sleep(CLOUDFLARE_RECHECK_SECONDS)
             if not await self._looks_like_cloudflare(tab):
                 return
+            print("仍在等待 Cloudflare 验证完成。", flush=True)
         raise RuntimeError("Cloudflare 真人认证等待超时")
 
     async def _ensure_logged_in(self, tab) -> None:
@@ -256,7 +261,10 @@ class NodriverPublicChecker:
             content = await tab.get_content()
         except Exception:
             return False
-        return bool(CLOUDFLARE_TEXT_RE.search(content))
+        matched = bool(CLOUDFLARE_TEXT_RE.search(content))
+        if matched:
+            await _click_cloudflare_checkbox_if_present(tab)
+        return matched
 
     async def _wait_until_cloudflare_cleared(self, tab) -> None:
         max_checks = max(1, (self._config.cloudflare_wait_seconds + CLOUDFLARE_RECHECK_SECONDS - 1) // CLOUDFLARE_RECHECK_SECONDS)
@@ -264,6 +272,7 @@ class NodriverPublicChecker:
             await self._async_sleep(CLOUDFLARE_RECHECK_SECONDS)
             if not await self._looks_like_cloudflare(tab):
                 return
+            print("仍在等待 Cloudflare 验证完成。", flush=True)
         raise RuntimeError("Cloudflare 真人认证等待超时")
 
 
@@ -284,6 +293,34 @@ async def _find_first_order_control(tab):
             element = await tab.find(text, best_match=True)
         except Exception:
             element = None
+        if element is not None:
+            return element
+    return None
+
+
+async def _click_cloudflare_checkbox_if_present(tab) -> None:
+    element = await _first_selected(tab, CLOUDFLARE_CHECKBOX_SELECTORS)
+    if element is None:
+        element = await _first_xpath(tab, CLOUDFLARE_CHECKBOX_XPATHS)
+    if element is None:
+        return
+    try:
+        await element.click()
+    except Exception:
+        return
+
+
+async def _first_xpath(tab, xpaths: list[str]):
+    xpath = getattr(tab, "xpath", None)
+    if xpath is None:
+        return None
+    for expression in xpaths:
+        try:
+            element = await xpath(expression)
+        except Exception:
+            element = None
+        if isinstance(element, (list, tuple)):
+            element = element[0] if element else None
         if element is not None:
             return element
     return None
