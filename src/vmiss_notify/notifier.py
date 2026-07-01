@@ -61,11 +61,12 @@ class MessageNotifier:
             "toUser": self._config.message_to_users,
             "msgType": "text",
             "text": {"content": content},
+            "accessToken": token.access_token,
+            "corpId": token.corp_id,
         }
         response = self._transport.post_json(
             self._url("/cgi/message/send"),
             payload,
-            headers={"corpAccessToken": token.access_token, "corpId": token.corp_id},
         )
         self._ensure_success(response)
 

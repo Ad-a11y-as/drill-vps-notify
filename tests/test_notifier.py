@@ -87,11 +87,16 @@ class MessageNotifierTest(unittest.TestCase):
             {"appId": "app-id", "appSecret": "app-secret", "permanentCode": "permanent-code"},
         )
         self.assertTrue(transport.calls[1]["url"].startswith("https://notify.example.com/cgi/message/send?thirdTraceId="))
-        self.assertEqual(transport.calls[1]["headers"]["corpAccessToken"], "token-1")
-        self.assertEqual(transport.calls[1]["headers"]["corpId"], "corp-1")
+        self.assertEqual(transport.calls[1]["headers"], {})
         self.assertEqual(
             transport.calls[1]["payload"],
-            {"toUser": ["user1", "user2"], "msgType": "text", "text": {"content": "VMISS 有货"}},
+            {
+                "toUser": ["user1", "user2"],
+                "msgType": "text",
+                "text": {"content": "VMISS 有货"},
+                "accessToken": "token-1",
+                "corpId": "corp-1",
+            },
         )
 
     def test_send_text_reuses_token_before_6600_seconds(self):
@@ -111,7 +116,7 @@ class MessageNotifierTest(unittest.TestCase):
 
         token_calls = [call for call in transport.calls if "/cgi/corpAccessToken/get/V2" in call["url"]]
         self.assertEqual(len(token_calls), 1)
-        self.assertEqual(transport.calls[-1]["headers"]["corpAccessToken"], "token-1")
+        self.assertEqual(transport.calls[-1]["payload"]["accessToken"], "token-1")
 
     def test_send_text_renews_token_at_6600_seconds(self):
         clock = FakeClock(1000)
@@ -131,7 +136,7 @@ class MessageNotifierTest(unittest.TestCase):
 
         token_calls = [call for call in transport.calls if "/cgi/corpAccessToken/get/V2" in call["url"]]
         self.assertEqual(len(token_calls), 2)
-        self.assertEqual(transport.calls[-1]["headers"]["corpAccessToken"], "token-2")
+        self.assertEqual(transport.calls[-1]["payload"]["accessToken"], "token-2")
 
     def test_send_text_renews_early_when_expires_in_is_shorter_than_6600_seconds(self):
         clock = FakeClock(1000)
@@ -151,7 +156,7 @@ class MessageNotifierTest(unittest.TestCase):
 
         token_calls = [call for call in transport.calls if "/cgi/corpAccessToken/get/V2" in call["url"]]
         self.assertEqual(len(token_calls), 2)
-        self.assertEqual(transport.calls[-1]["headers"]["corpAccessToken"], "token-2")
+        self.assertEqual(transport.calls[-1]["payload"]["accessToken"], "token-2")
 
     def test_send_text_raises_when_api_returns_non_zero_error_code(self):
         transport = FakeTransport(
