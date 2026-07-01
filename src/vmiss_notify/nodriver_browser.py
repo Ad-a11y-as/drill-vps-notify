@@ -351,6 +351,7 @@ def _html_to_visible_text(content: str) -> str:
 
 async def _click_cloudflare_checkbox_if_present(tab) -> None:
     _log("准备查找 Cloudflare checkbox。")
+    await _print_cloudflare_checkbox_page(tab)
     element = await _first_selected(tab, CLOUDFLARE_CHECKBOX_SELECTORS)
     if element is None:
         element = await _first_xpath(tab, CLOUDFLARE_CHECKBOX_XPATHS)
@@ -358,7 +359,7 @@ async def _click_cloudflare_checkbox_if_present(tab) -> None:
         _log("未找到 Cloudflare checkbox。")
         return
     _log("找到 Cloudflare checkbox，准备点击。")
-    await _print_cloudflare_checkbox_page(tab)
+
     try:
         await _await_browser_action(element.click(), "点击 Cloudflare checkbox")
         _log("已点击 Cloudflare checkbox。")
