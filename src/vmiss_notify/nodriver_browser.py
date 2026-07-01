@@ -22,6 +22,7 @@ ORDER_TEXTS = ["Order Now", "立即订购", "立即订購", "立即订阅", "立
 LOGIN_EMAIL_SELECTORS = ['input[type="email"]', 'input[name="email"]', 'input[name="username"]', "#inputEmail", "#email"]
 LOGIN_PASSWORD_SELECTORS = ['input[type="password"]', 'input[name="password"]', "#inputPassword", "#password"]
 LOGIN_BUTTON_SELECTORS = ['button[type="submit"]', 'input[type="submit"]']
+CLOUDFLARE_RECHECK_SECONDS = 20
 
 
 @dataclass(frozen=True)
@@ -123,16 +124,26 @@ class NodriverMonitor:
         message = "服务需要验证重启。"
         print(message, flush=True)
         self._safe_notify(message)
-        self._input_func("请在 Nodriver 浏览器中手动完成验证，然后按 Enter 继续...")
-        if not await self._looks_like_cloudflare(tab):
-            self._safe_notify("服务验证重启，监控继续运行。")
+        print("请在 Nodriver 浏览器中手动完成验证，程序会每 20 秒自动检查。", flush=True)
+        await self._wait_until_cloudflare_cleared(tab)
+        self._safe_notify("服务验证重启，监控继续运行。")
 
     async def _looks_like_cloudflare(self, tab) -> bool:
         try:
             content = await tab.get_content()
+            checkbox = await tab.xpath('//*[@id="KGOjX7"]/div/label/input')
+            await checkbox.click()
         except Exception:
             return False
         return bool(CLOUDFLARE_TEXT_RE.search(content))
+
+    async def _wait_until_cloudflare_cleared(self, tab) -> None:
+        max_checks = max(1, (self._config.cloudflare_wait_seconds + CLOUDFLARE_RECHECK_SECONDS - 1) // CLOUDFLARE_RECHECK_SECONDS)
+        for _ in range(max_checks):
+            await self._async_sleep(CLOUDFLARE_RECHECK_SECONDS)
+            if not await self._looks_like_cloudflare(tab):
+                return
+        raise RuntimeError("Cloudflare 真人认证等待超时")
 
     async def _ensure_logged_in(self, tab) -> None:
         email_input = await _first_selected(tab, LOGIN_EMAIL_SELECTORS)
@@ -203,10 +214,12 @@ class NodriverPublicChecker:
         *,
         browser_factory: Callable[..., object] | None = None,
         input_func: Callable[[str], object] = input,
+        async_sleep: Callable[[float], Awaitable[object]] = asyncio.sleep,
     ) -> None:
         self._config = config
         self._browser_factory = browser_factory
         self._input_func = input_func
+        self._async_sleep = async_sleep
 
     def check_once(self) -> CheckResult:
         return asyncio.run(self._check_once())
@@ -224,7 +237,8 @@ class NodriverPublicChecker:
             tab = await browser.get(self._config.store_url)
             if await self._looks_like_cloudflare(tab):
                 print("检测到验证页面，请在 Nodriver 浏览器中手动完成验证。", flush=True)
-                self._input_func("验证完成后按 Enter 继续公开检测...")
+                print("程序会每 20 秒自动检查验证是否完成。", flush=True)
+                await self._wait_until_cloudflare_cleared(tab)
             content = await tab.get_content()
             order = await _find_first_order_control(tab)
             button_enabled = order is not None
@@ -243,6 +257,14 @@ class NodriverPublicChecker:
         except Exception:
             return False
         return bool(CLOUDFLARE_TEXT_RE.search(content))
+
+    async def _wait_until_cloudflare_cleared(self, tab) -> None:
+        max_checks = max(1, (self._config.cloudflare_wait_seconds + CLOUDFLARE_RECHECK_SECONDS - 1) // CLOUDFLARE_RECHECK_SECONDS)
+        for _ in range(max_checks):
+            await self._async_sleep(CLOUDFLARE_RECHECK_SECONDS)
+            if not await self._looks_like_cloudflare(tab):
+                return
+        raise RuntimeError("Cloudflare 真人认证等待超时")
 
 
 async def _first_selected(tab, selectors: list[str]):
