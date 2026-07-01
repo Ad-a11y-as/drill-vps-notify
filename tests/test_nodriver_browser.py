@@ -171,6 +171,27 @@ class NodriverBrowserTest(unittest.TestCase):
         self.assertIn("===== Cloudflare checkbox 页面 HTML 结束 =====", output.getvalue())
         self.assertIn("已点击 Cloudflare checkbox。", output.getvalue())
 
+    def test_cloudflare_detection_prints_runtime_dom_snapshot(self):
+        monitor = NodriverMonitor(
+            make_config(),
+            FakeNotifier(),
+            browser_factory=lambda **kwargs: FakeBrowser(FakeTab("Verify you are human")),
+            async_sleep=no_sleep,
+        )
+        tab = FakeTab(
+            "Verify you are human",
+            dom_snapshot='<iframe src="https://challenges.cloudflare.com"><input type="checkbox" id="shadow-checkbox"></iframe>',
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            detected = asyncio.run(monitor._looks_like_cloudflare(tab))
+
+        self.assertTrue(detected)
+        self.assertIn("===== Cloudflare checkbox DOM 快照开始 =====", output.getvalue())
+        self.assertIn("shadow-checkbox", output.getvalue())
+        self.assertIn("===== Cloudflare checkbox DOM 快照结束 =====", output.getvalue())
+
     def test_cloudflare_detection_logs_when_checkbox_is_missing(self):
         monitor = NodriverMonitor(
             make_config(),
@@ -288,6 +309,7 @@ class NodriverBrowserTest(unittest.TestCase):
                 [
                     "Verify you are human",
                     "Verify you are human",
+                    "Verify you are human",
                     "US.LA.CN2.Basic\n0 Available\nSold Out",
                 ]
             )
@@ -330,12 +352,13 @@ class FakeBrowser:
 
 
 class FakeTab:
-    def __init__(self, content, checkbox_selector=None, visible_text=None, click_error=None):
+    def __init__(self, content, checkbox_selector=None, visible_text=None, click_error=None, dom_snapshot=None):
         self.content_sequence = list(content) if isinstance(content, list) else None
         self.content = content[0] if isinstance(content, list) else content
         self.checkbox_selector = checkbox_selector
         self.visible_text = visible_text
         self.click_error = click_error
+        self.dom_snapshot = dom_snapshot
         self.fail_content_on_call = None
         self.content_calls = 0
         self.clicked = False
@@ -362,6 +385,8 @@ class FakeTab:
         return None
 
     async def evaluate(self, expression):
+        if "collectCloudflareDomSnapshot" in expression:
+            return self.dom_snapshot
         return self.visible_text
 
     async def reload(self):

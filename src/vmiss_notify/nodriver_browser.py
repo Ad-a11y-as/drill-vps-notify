@@ -30,6 +30,82 @@ BROWSER_ACTION_TIMEOUT_SECONDS = 15
 PAGE_RENDER_WAIT_SECONDS = 3
 SCRIPT_STYLE_RE = re.compile(r"<(script|style|noscript)\b[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
 HTML_TAG_RE = re.compile(r"<[^>]+>")
+CLOUDFLARE_DOM_SNAPSHOT_SCRIPT = r"""
+(() => {
+  /* collectCloudflareDomSnapshot */
+  const seen = new WeakSet();
+  const lines = [];
+
+  function describeElement(element) {
+    if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+      return "";
+    }
+    const attrs = Array.from(element.attributes || [])
+      .map((attr) => `${attr.name}="${attr.value}"`)
+      .join(" ");
+    const rect = element.getBoundingClientRect ? element.getBoundingClientRect() : null;
+    const box = rect
+      ? ` data-rect="${Math.round(rect.x)},${Math.round(rect.y)},${Math.round(rect.width)},${Math.round(rect.height)}"`
+      : "";
+    return `<${element.tagName.toLowerCase()}${attrs ? " " + attrs : ""}${box}>`;
+  }
+
+  function walk(node, depth) {
+    if (!node || seen.has(node)) {
+      return;
+    }
+    seen.add(node);
+    const pad = "  ".repeat(depth);
+
+    if (node.nodeType === Node.DOCUMENT_NODE) {
+      lines.push(`${pad}#document ${node.location ? node.location.href : ""}`);
+      walk(node.documentElement, depth + 1);
+      return;
+    }
+
+    if (node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+      lines.push(`${pad}#shadow-root`);
+      Array.from(node.childNodes || []).forEach((child) => walk(child, depth + 1));
+      return;
+    }
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = (node.textContent || "").trim();
+      if (text) {
+        lines.push(`${pad}${text.slice(0, 500)}`);
+      }
+      return;
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+
+    lines.push(`${pad}${describeElement(node)}`);
+
+    if (node.shadowRoot) {
+      walk(node.shadowRoot, depth + 1);
+    }
+
+    if (node.tagName === "IFRAME" || node.tagName === "FRAME") {
+      try {
+        if (node.contentDocument) {
+          walk(node.contentDocument, depth + 1);
+        } else {
+          lines.push(`${pad}  #frame inaccessible or not loaded`);
+        }
+      } catch (error) {
+        lines.push(`${pad}  #frame inaccessible: ${error.name}: ${error.message}`);
+      }
+    }
+
+    Array.from(node.childNodes || []).forEach((child) => walk(child, depth + 1));
+  }
+
+  walk(document, 0);
+  return lines.join("\n");
+})()
+"""
 
 
 @dataclass(frozen=True)
@@ -378,6 +454,26 @@ async def _print_cloudflare_checkbox_page(tab) -> None:
     print("===== Cloudflare checkbox 页面 HTML 开始 =====", flush=True)
     print(content, flush=True)
     print("===== Cloudflare checkbox 页面 HTML 结束 =====", flush=True)
+    await _print_cloudflare_checkbox_dom_snapshot(tab)
+
+
+async def _print_cloudflare_checkbox_dom_snapshot(tab) -> None:
+    evaluate = getattr(tab, "evaluate", None)
+    if evaluate is None:
+        _log("当前 tab 不支持打印 Cloudflare checkbox DOM 快照。")
+        return
+    _log("开始打印 Cloudflare checkbox DOM 快照。")
+    try:
+        snapshot = await _await_browser_action(
+            evaluate(CLOUDFLARE_DOM_SNAPSHOT_SCRIPT),
+            "读取 Cloudflare checkbox DOM 快照",
+        )
+    except Exception as exc:
+        _log(f"打印 Cloudflare checkbox DOM 快照异常：{exc}")
+        return
+    print("===== Cloudflare checkbox DOM 快照开始 =====", flush=True)
+    print(snapshot or "", flush=True)
+    print("===== Cloudflare checkbox DOM 快照结束 =====", flush=True)
 
 
 async def _first_xpath(tab, xpaths: list[str]):
