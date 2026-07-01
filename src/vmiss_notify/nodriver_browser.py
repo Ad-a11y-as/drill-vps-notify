@@ -352,19 +352,31 @@ def _html_to_visible_text(content: str) -> str:
 async def _click_cloudflare_checkbox_if_present(tab) -> None:
     _log("准备查找 Cloudflare checkbox。")
     element = await _first_selected(tab, CLOUDFLARE_CHECKBOX_SELECTORS)
-    _log(f"页面：{tab}")
     if element is None:
         element = await _first_xpath(tab, CLOUDFLARE_CHECKBOX_XPATHS)
     if element is None:
         _log("未找到 Cloudflare checkbox。")
         return
     _log("找到 Cloudflare checkbox，准备点击。")
+    await _print_cloudflare_checkbox_page(tab)
     try:
         await _await_browser_action(element.click(), "点击 Cloudflare checkbox")
         _log("已点击 Cloudflare checkbox。")
     except Exception as exc:
         _log(f"点击 Cloudflare checkbox 异常：{exc}")
         return
+
+
+async def _print_cloudflare_checkbox_page(tab) -> None:
+    _log("开始打印 Cloudflare checkbox 页面 HTML。")
+    try:
+        content = await _await_browser_action(tab.get_content(), "读取 Cloudflare checkbox 页面 HTML")
+    except Exception as exc:
+        _log(f"打印 Cloudflare checkbox 页面 HTML 异常：{exc}")
+        return
+    print("===== Cloudflare checkbox 页面 HTML 开始 =====", flush=True)
+    print(content, flush=True)
+    print("===== Cloudflare checkbox 页面 HTML 结束 =====", flush=True)
 
 
 async def _first_xpath(tab, xpaths: list[str]):

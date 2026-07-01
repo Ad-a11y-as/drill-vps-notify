@@ -88,6 +88,36 @@ class NodriverBrowserTest(unittest.TestCase):
             self.assertNotIn("RuntimeError", message)
             self.assertNotIn("secret backend detail", message)
 
+    def test_monitor_logs_check_refresh_and_render_steps(self):
+        notifier = FakeNotifier()
+        browser = FakeBrowser(
+            FakeTab(
+                [
+                    "US.LA.CN2.Basic\n0 Available\nSold Out",
+                    "US.LA.CN2.Basic\n0 Available\nSold Out",
+                    "US.LA.CN2.Basic\n1 Available\nOrder Now",
+                    "US.LA.CN2.Basic\n1 Available\nOrder Now",
+                ]
+            )
+        )
+        monitor = NodriverMonitor(
+            make_config(),
+            notifier,
+            browser_factory=lambda **kwargs: browser,
+            async_sleep=no_sleep,
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            monitor.monitor_forever()
+
+        self.assertIn("开始一轮库存检查。", output.getvalue())
+        self.assertIn("等待 30 秒后刷新页面。", output.getvalue())
+        self.assertIn("准备刷新页面。", output.getvalue())
+        self.assertIn("页面刷新完成。", output.getvalue())
+        self.assertIn("等待页面渲染 3 秒。", output.getvalue())
+        self.assertIn("页面渲染等待结束。", output.getvalue())
+
     def test_cloudflare_requires_manual_confirmation(self):
         notifier = FakeNotifier()
         prompts = []
@@ -136,6 +166,9 @@ class NodriverBrowserTest(unittest.TestCase):
         self.assertTrue(tab.clicked)
         self.assertIn("准备查找 Cloudflare checkbox。", output.getvalue())
         self.assertIn("找到 Cloudflare checkbox，准备点击。", output.getvalue())
+        self.assertIn("===== Cloudflare checkbox 页面 HTML 开始 =====", output.getvalue())
+        self.assertIn("Verify you are human", output.getvalue())
+        self.assertIn("===== Cloudflare checkbox 页面 HTML 结束 =====", output.getvalue())
         self.assertIn("已点击 Cloudflare checkbox。", output.getvalue())
 
     def test_cloudflare_detection_logs_when_checkbox_is_missing(self):
@@ -153,6 +186,10 @@ class NodriverBrowserTest(unittest.TestCase):
 
         self.assertTrue(detected)
         self.assertFalse(tab.clicked)
+        self.assertIn("开始检测 Cloudflare。", output.getvalue())
+        self.assertIn("准备读取页面可见文本。", output.getvalue())
+        self.assertIn("准备读取页面 HTML。", output.getvalue())
+        self.assertIn("Cloudflare 检测结果：命中。", output.getvalue())
         self.assertIn("准备查找 Cloudflare checkbox。", output.getvalue())
         self.assertIn("未找到 Cloudflare checkbox。", output.getvalue())
 
