@@ -42,6 +42,17 @@ def bring_page_to_front(page) -> None:
         pass
 
 
+def _response_indicates_cloudflare(response) -> bool:
+    if response is None:
+        return False
+    try:
+        status = response.status
+        url = response.url
+    except Exception:
+        return False
+    return status == 403 or "/cdn-cgi/challenge" in url
+
+
 def build_launch_options(config: AppConfig | PublicCheckConfig) -> dict:
     options = {
         "user_data_dir": str(config.user_data_dir),
@@ -63,8 +74,8 @@ class VmissMonitor:
     def setup_login(self) -> None:
         with self._launch_context() as context:
             page = context.new_page()
-            page.goto(self._config.store_url, wait_until="domcontentloaded")
-            self._handle_cloudflare(page)
+            response = page.goto(self._config.store_url, wait_until="domcontentloaded")
+            self._handle_cloudflare(page, response)
             self._ensure_logged_in(page)
             self._login_notifier.notify_success(self._config.target_product)
             input("请在打开的浏览器中确认已经登录，然后按 Enter 结束登录初始化...")
@@ -72,8 +83,8 @@ class VmissMonitor:
     def run_once(self) -> CheckResult:
         with self._launch_context() as context:
             page = context.new_page()
-            page.goto(self._config.store_url, wait_until="domcontentloaded")
-            self._handle_cloudflare(page)
+            response = page.goto(self._config.store_url, wait_until="domcontentloaded")
+            self._handle_cloudflare(page, response)
             self._ensure_logged_in(page)
             return self._check_and_order(page)
 
@@ -110,7 +121,8 @@ class VmissMonitor:
             self._click_first(page, LOGIN_BUTTON_SELECTORS)
             page.wait_for_load_state("domcontentloaded", timeout=30000)
             self._handle_cloudflare(page)
-            page.goto(self._config.store_url, wait_until="domcontentloaded")
+            response = page.goto(self._config.store_url, wait_until="domcontentloaded")
+            self._handle_cloudflare(page, response)
         self._login_notifier.notify_success(self._config.target_product)
 
     def _is_login_form_visible(self, page) -> bool:
@@ -124,8 +136,8 @@ class VmissMonitor:
             return any(page.locator(selector).first.is_visible(timeout=1000) for selector in LOGIN_EMAIL_SELECTORS)
         return False
 
-    def _handle_cloudflare(self, page) -> None:
-        if not self._wait_until_cloudflare_or_product(page):
+    def _handle_cloudflare(self, page, response=None) -> None:
+        if not self._wait_until_cloudflare_or_product(page, response):
             return
 
         bring_page_to_front(page)
@@ -140,7 +152,9 @@ class VmissMonitor:
             time.sleep(5)
         raise RuntimeError("Cloudflare 真人认证等待超时")
 
-    def _wait_until_cloudflare_or_product(self, page) -> bool:
+    def _wait_until_cloudflare_or_product(self, page, response=None) -> bool:
+        if _response_indicates_cloudflare(response):
+            return True
         deadline = time.time() + 15
         while time.time() < deadline:
             if self._looks_like_cloudflare(page):
@@ -243,8 +257,8 @@ class VmissPublicChecker:
     def check_once(self) -> CheckResult:
         with self._launch_context() as context:
             page = context.new_page()
-            page.goto(self._config.store_url, wait_until="domcontentloaded")
-            self._handle_cloudflare(page)
+            response = page.goto(self._config.store_url, wait_until="domcontentloaded")
+            self._handle_cloudflare(page, response)
             card = self._find_product_card(page)
             card_text = card.inner_text(timeout=10000)
             order = self._find_order_control(card)
@@ -269,27 +283,23 @@ class VmissPublicChecker:
         context = playwright.chromium.launch_persistent_context(**build_launch_options(self._config))
         return _ContextManager(playwright, context)
 
-    def _handle_cloudflare(self, page) -> None:
-        if not self._wait_until_cloudflare_or_product(page):
+    def _handle_cloudflare(self, page, response=None) -> None:
+        if not self._wait_until_cloudflare_or_product(page, response):
             return
 
         bring_page_to_front(page)
         print("检测到 Cloudflare 真人认证，已打开浏览器窗口，请手动点击完成验证。", flush=True)
         deadline = time.time() + self._config.cloudflare_wait_seconds
         while time.time() < deadline:
-            try:
-                title = page.title()
-                body = page.locator("body").inner_text(timeout=3000)
-            except Exception:
-                time.sleep(5)
-                continue
-            if not CLOUDFLARE_TEXT_RE.search(f"{title}\n{body}"):
+            if not self._looks_like_cloudflare(page):
                 print("Cloudflare 真人认证已通过，继续公开检测。", flush=True)
                 return
             time.sleep(5)
         raise RuntimeError("Cloudflare 真人认证等待超时")
 
-    def _wait_until_cloudflare_or_product(self, page) -> bool:
+    def _wait_until_cloudflare_or_product(self, page, response=None) -> bool:
+        if _response_indicates_cloudflare(response):
+            return True
         deadline = time.time() + 15
         while time.time() < deadline:
             if self._looks_like_cloudflare(page):
