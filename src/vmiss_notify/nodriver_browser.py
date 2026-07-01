@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import inspect
 import random
 import re
@@ -25,6 +26,8 @@ LOGIN_BUTTON_SELECTORS = ['button[type="submit"]', 'input[type="submit"]']
 CLOUDFLARE_CHECKBOX_SELECTORS = ['input[type="checkbox"]', 'label input[type="checkbox"]']
 CLOUDFLARE_CHECKBOX_XPATHS = ['//input[@type="checkbox"]', '//label//input[@type="checkbox"]']
 CLOUDFLARE_RECHECK_SECONDS = 20
+SCRIPT_STYLE_RE = re.compile(r"<(script|style|noscript)\b[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
+HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
 @dataclass(frozen=True)
@@ -133,7 +136,7 @@ class NodriverMonitor:
 
     async def _looks_like_cloudflare(self, tab) -> bool:
         try:
-            content = await tab.get_content()
+            content = await _visible_text_or_content(tab)
         except Exception:
             return False
         matched = bool(CLOUDFLARE_TEXT_RE.search(content))
@@ -258,7 +261,7 @@ class NodriverPublicChecker:
 
     async def _looks_like_cloudflare(self, tab) -> bool:
         try:
-            content = await tab.get_content()
+            content = await _visible_text_or_content(tab)
         except Exception:
             return False
         matched = bool(CLOUDFLARE_TEXT_RE.search(content))
@@ -296,6 +299,24 @@ async def _find_first_order_control(tab):
         if element is not None:
             return element
     return None
+
+
+async def _visible_text_or_content(tab) -> str:
+    evaluate = getattr(tab, "evaluate", None)
+    if evaluate is not None:
+        try:
+            text = await _maybe_await(evaluate("document.body ? document.body.innerText : ''"))
+        except Exception:
+            text = None
+        if isinstance(text, str) and text.strip():
+            return text
+    return _html_to_visible_text(await tab.get_content())
+
+
+def _html_to_visible_text(content: str) -> str:
+    without_scripts = SCRIPT_STYLE_RE.sub(" ", content)
+    without_tags = HTML_TAG_RE.sub(" ", without_scripts)
+    return html.unescape(without_tags)
 
 
 async def _click_cloudflare_checkbox_if_present(tab) -> None:

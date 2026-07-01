@@ -133,6 +133,22 @@ class NodriverBrowserTest(unittest.TestCase):
         self.assertTrue(detected)
         self.assertTrue(tab.clicked)
 
+    def test_cloudflare_detection_uses_visible_text_after_challenge_clears(self):
+        monitor = NodriverMonitor(
+            make_config(),
+            FakeNotifier(),
+            browser_factory=lambda **kwargs: FakeBrowser(FakeTab("Verify you are human")),
+            async_sleep=no_sleep,
+        )
+        tab = FakeTab(
+            "<html><body>US.LA.CN2.Basic\n0 Available\nSold Out<script>Cloudflare</script></body></html>",
+            visible_text="US.LA.CN2.Basic\n0 Available\nSold Out",
+        )
+
+        detected = asyncio.run(monitor._looks_like_cloudflare(tab))
+
+        self.assertFalse(detected)
+
     def test_cloudflare_waits_20_seconds_until_manual_verification_completes(self):
         notifier = FakeNotifier()
         prompts = []
@@ -235,10 +251,11 @@ class FakeBrowser:
 
 
 class FakeTab:
-    def __init__(self, content, checkbox_selector=None):
+    def __init__(self, content, checkbox_selector=None, visible_text=None):
         self.content_sequence = list(content) if isinstance(content, list) else None
         self.content = content[0] if isinstance(content, list) else content
         self.checkbox_selector = checkbox_selector
+        self.visible_text = visible_text
         self.fail_content_on_call = None
         self.content_calls = 0
         self.clicked = False
@@ -263,6 +280,9 @@ class FakeTab:
         if selector == self.checkbox_selector:
             return FakeElement(self)
         return None
+
+    async def evaluate(self, expression):
+        return self.visible_text
 
     async def reload(self):
         return None
