@@ -46,6 +46,7 @@ VMISS_TARGET_PRODUCT=US.LA.CN2.Elite
 CHECK_INTERVAL_SECONDS=15
 HEADLESS=true
 PLAYWRIGHT_USER_DATA_DIR=.browser-profile
+PLAYWRIGHT_BROWSER_CHANNEL=chrome
 MESSAGE_CLOUD_DOMAIN=notify.example.com
 MESSAGE_APP_ID=app-id
 MESSAGE_APP_SECRET=app-secret
@@ -64,6 +65,7 @@ MESSAGE_TO_USERS=user1,user2
         self.assertEqual(config.check_interval_seconds, 15)
         self.assertIs(config.headless, True)
         self.assertEqual(config.user_data_dir, Path(".browser-profile"))
+        self.assertEqual(config.browser_channel, "chrome")
         self.assertEqual(config.message_cloud_domain, "notify.example.com")
         self.assertEqual(config.message_to_users, ["user1", "user2"])
 
@@ -87,6 +89,7 @@ MESSAGE_TO_USERS=user1,user2
 VMISS_STORE_URL=https://app.vmiss.com/store/us-los-angeles-cn2
 VMISS_TARGET_PRODUCT=US.LA.CN2.Pro
 HEADLESS=true
+PLAYWRIGHT_BROWSER_CHANNEL=chrome
 """.strip(),
             encoding="utf-8",
         )
@@ -96,6 +99,7 @@ HEADLESS=true
         self.assertEqual(config.store_url, "https://app.vmiss.com/store/us-los-angeles-cn2")
         self.assertEqual(config.target_product, "US.LA.CN2.Pro")
         self.assertIs(config.headless, True)
+        self.assertEqual(config.browser_channel, "chrome")
 
     def test_public_check_config_requires_target_product(self):
         env_file = Path("tmp_test_config.env")

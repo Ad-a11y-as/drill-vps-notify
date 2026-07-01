@@ -42,6 +42,18 @@ def bring_page_to_front(page) -> None:
         pass
 
 
+def build_launch_options(config: AppConfig | PublicCheckConfig) -> dict:
+    options = {
+        "user_data_dir": str(config.user_data_dir),
+        "headless": config.headless,
+        "viewport": {"width": 1280, "height": 900},
+        "locale": "zh-CN",
+    }
+    if config.browser_channel:
+        options["channel"] = config.browser_channel
+    return options
+
+
 class VmissMonitor:
     def __init__(self, config: AppConfig, notifier: MessageNotifier) -> None:
         self._config = config
@@ -88,12 +100,7 @@ class VmissMonitor:
             raise RuntimeError("Playwright 未安装，请先运行 pip install -r requirements.txt") from exc
 
         playwright = sync_playwright().start()
-        context = playwright.chromium.launch_persistent_context(
-            user_data_dir=str(self._config.user_data_dir),
-            headless=self._config.headless,
-            viewport={"width": 1280, "height": 900},
-            locale="zh-CN",
-        )
+        context = playwright.chromium.launch_persistent_context(**build_launch_options(self._config))
         return _ContextManager(playwright, context)
 
     def _ensure_logged_in(self, page) -> None:
@@ -259,12 +266,7 @@ class VmissPublicChecker:
             raise RuntimeError("Playwright 未安装，请先运行 pip install -r requirements.txt") from exc
 
         playwright = sync_playwright().start()
-        context = playwright.chromium.launch_persistent_context(
-            user_data_dir=str(self._config.user_data_dir),
-            headless=self._config.headless,
-            viewport={"width": 1280, "height": 900},
-            locale="zh-CN",
-        )
+        context = playwright.chromium.launch_persistent_context(**build_launch_options(self._config))
         return _ContextManager(playwright, context)
 
     def _handle_cloudflare(self, page) -> None:

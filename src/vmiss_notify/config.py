@@ -26,6 +26,7 @@ class AppConfig:
     message_permanent_code: str
     message_to_users: list[str]
     token_refresh_after_seconds: int = 6600
+    browser_channel: str | None = None
 
     @classmethod
     def from_env_file(cls, path: Path | str = ".env") -> "AppConfig":
@@ -55,6 +56,7 @@ class AppConfig:
             check_interval_seconds=parse_int(values.get("CHECK_INTERVAL_SECONDS", "30"), "CHECK_INTERVAL_SECONDS"),
             headless=parse_bool(values.get("HEADLESS", "false"), "HEADLESS"),
             user_data_dir=Path(values.get("PLAYWRIGHT_USER_DATA_DIR", ".browser-profile").strip()),
+            browser_channel=parse_optional_string(values.get("PLAYWRIGHT_BROWSER_CHANNEL", "")),
             login_url=values.get("VMISS_LOGIN_URL", "https://app.vmiss.com/login").strip(),
             cloudflare_wait_seconds=parse_int(
                 values.get("CLOUDFLARE_WAIT_SECONDS", "900"), "CLOUDFLARE_WAIT_SECONDS"
@@ -77,6 +79,7 @@ class PublicCheckConfig:
     headless: bool
     user_data_dir: Path
     cloudflare_wait_seconds: int
+    browser_channel: str | None = None
 
     @classmethod
     def from_env_file(cls, path: Path | str = ".env") -> "PublicCheckConfig":
@@ -94,6 +97,7 @@ class PublicCheckConfig:
             target_product=target_product,
             headless=parse_bool(values.get("HEADLESS", "false"), "HEADLESS"),
             user_data_dir=Path(values.get("PLAYWRIGHT_USER_DATA_DIR", ".browser-profile-public").strip()),
+            browser_channel=parse_optional_string(values.get("PLAYWRIGHT_BROWSER_CHANNEL", "")),
             cloudflare_wait_seconds=parse_int(
                 values.get("CLOUDFLARE_WAIT_SECONDS", "900"), "CLOUDFLARE_WAIT_SECONDS"
             ),
@@ -147,6 +151,11 @@ def parse_int(value: str, name: str) -> int:
 def parse_csv(value: str) -> list[str]:
     items = [item.strip() for item in value.split(",")]
     return [item for item in items if item]
+
+
+def parse_optional_string(value: str) -> str | None:
+    parsed = value.strip()
+    return parsed or None
 
 
 def normalize_domain(value: str) -> str:

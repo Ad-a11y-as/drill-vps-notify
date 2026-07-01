@@ -84,6 +84,7 @@ cp .env.example .env
 | `CHECK_INTERVAL_SECONDS` | `30` | `monitor` 的轮询间隔。 |
 | `HEADLESS` | `false` | 建议保持 `false`，否则无法人工处理 Cloudflare。 |
 | `PLAYWRIGHT_USER_DATA_DIR` | `.browser-profile` | 浏览器登录态目录。 |
+| `PLAYWRIGHT_BROWSER_CHANNEL` | 空 | 可选，指定已安装的 Chromium 内核浏览器，例如 `chrome` 或 `msedge`；留空时使用 Playwright 自带 Chromium。 |
 | `CLOUDFLARE_WAIT_SECONDS` | `900` | 等待你人工完成 Cloudflare 的最长秒数。 |
 | `TOKEN_REFRESH_AFTER_SECONDS` | `6600` | 消息接口 token 主动刷新时间。 |
 
@@ -98,6 +99,7 @@ VMISS_TARGET_PRODUCT=US.LA.CN2.Basic
 CHECK_INTERVAL_SECONDS=30
 HEADLESS=false
 PLAYWRIGHT_USER_DATA_DIR=.browser-profile
+PLAYWRIGHT_BROWSER_CHANNEL=
 CLOUDFLARE_WAIT_SECONDS=900
 
 MESSAGE_CLOUD_DOMAIN=your-cloud-domain.example.com
