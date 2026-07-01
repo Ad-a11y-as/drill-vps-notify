@@ -320,14 +320,19 @@ def _html_to_visible_text(content: str) -> str:
 
 
 async def _click_cloudflare_checkbox_if_present(tab) -> None:
+    print("准备查找 Cloudflare checkbox。", flush=True)
     element = await _first_selected(tab, CLOUDFLARE_CHECKBOX_SELECTORS)
     if element is None:
         element = await _first_xpath(tab, CLOUDFLARE_CHECKBOX_XPATHS)
     if element is None:
+        print("未找到 Cloudflare checkbox。", flush=True)
         return
+    print("找到 Cloudflare checkbox，准备点击。", flush=True)
     try:
         await element.click()
-    except Exception:
+        print("已点击 Cloudflare checkbox。", flush=True)
+    except Exception as exc:
+        print(f"点击 Cloudflare checkbox 异常：{exc}", flush=True)
         return
 
 

@@ -127,11 +127,53 @@ class NodriverBrowserTest(unittest.TestCase):
             async_sleep=no_sleep,
         )
         tab = FakeTab("Verify you are human", checkbox_selector='input[type="checkbox"]')
+        output = io.StringIO()
 
-        detected = asyncio.run(monitor._looks_like_cloudflare(tab))
+        with redirect_stdout(output):
+            detected = asyncio.run(monitor._looks_like_cloudflare(tab))
 
         self.assertTrue(detected)
         self.assertTrue(tab.clicked)
+        self.assertIn("准备查找 Cloudflare checkbox。", output.getvalue())
+        self.assertIn("找到 Cloudflare checkbox，准备点击。", output.getvalue())
+        self.assertIn("已点击 Cloudflare checkbox。", output.getvalue())
+
+    def test_cloudflare_detection_logs_when_checkbox_is_missing(self):
+        monitor = NodriverMonitor(
+            make_config(),
+            FakeNotifier(),
+            browser_factory=lambda **kwargs: FakeBrowser(FakeTab("Verify you are human")),
+            async_sleep=no_sleep,
+        )
+        tab = FakeTab("Verify you are human")
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            detected = asyncio.run(monitor._looks_like_cloudflare(tab))
+
+        self.assertTrue(detected)
+        self.assertFalse(tab.clicked)
+        self.assertIn("准备查找 Cloudflare checkbox。", output.getvalue())
+        self.assertIn("未找到 Cloudflare checkbox。", output.getvalue())
+
+    def test_cloudflare_detection_logs_checkbox_click_exception(self):
+        monitor = NodriverMonitor(
+            make_config(),
+            FakeNotifier(),
+            browser_factory=lambda **kwargs: FakeBrowser(FakeTab("Verify you are human")),
+            async_sleep=no_sleep,
+        )
+        tab = FakeTab("Verify you are human", checkbox_selector='input[type="checkbox"]', click_error=RuntimeError("blocked"))
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            detected = asyncio.run(monitor._looks_like_cloudflare(tab))
+
+        self.assertTrue(detected)
+        self.assertFalse(tab.clicked)
+        self.assertIn("准备查找 Cloudflare checkbox。", output.getvalue())
+        self.assertIn("找到 Cloudflare checkbox，准备点击。", output.getvalue())
+        self.assertIn("点击 Cloudflare checkbox 异常：blocked", output.getvalue())
 
     def test_cloudflare_detection_uses_visible_text_after_challenge_clears(self):
         monitor = NodriverMonitor(
@@ -251,11 +293,12 @@ class FakeBrowser:
 
 
 class FakeTab:
-    def __init__(self, content, checkbox_selector=None, visible_text=None):
+    def __init__(self, content, checkbox_selector=None, visible_text=None, click_error=None):
         self.content_sequence = list(content) if isinstance(content, list) else None
         self.content = content[0] if isinstance(content, list) else content
         self.checkbox_selector = checkbox_selector
         self.visible_text = visible_text
+        self.click_error = click_error
         self.fail_content_on_call = None
         self.content_calls = 0
         self.clicked = False
@@ -296,6 +339,8 @@ class FakeElement:
         self._tab = tab
 
     async def click(self):
+        if self._tab.click_error is not None:
+            raise self._tab.click_error
         self._tab.clicked = True
 
     async def send_keys(self, text):
