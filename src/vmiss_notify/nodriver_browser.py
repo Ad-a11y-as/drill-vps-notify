@@ -28,6 +28,8 @@ CLOUDFLARE_CHECKBOX_XPATHS = ['//input[@type="checkbox"]', '//label//input[@type
 CLOUDFLARE_RECHECK_SECONDS = 20
 BROWSER_ACTION_TIMEOUT_SECONDS = 15
 PAGE_RENDER_WAIT_SECONDS = 3
+CLOUDFLARE_CHECKBOX_WAIT_ATTEMPTS = 5
+CLOUDFLARE_CHECKBOX_POLL_SECONDS = 1
 SCRIPT_STYLE_RE = re.compile(r"<(script|style|noscript)\b[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
 HTML_TAG_RE = re.compile(r"<[^>]+>")
 CLOUDFLARE_DOM_SNAPSHOT_SCRIPT = r"""
@@ -224,7 +226,7 @@ class NodriverMonitor:
         matched = bool(CLOUDFLARE_TEXT_RE.search(content))
         _log(f"Cloudflare 检测结果：{'命中' if matched else '未命中'}。")
         if matched:
-            await _click_cloudflare_checkbox_if_present(tab)
+            await _click_cloudflare_checkbox_if_present(tab, self._async_sleep)
         return matched
 
     async def _wait_until_cloudflare_cleared(self, tab) -> None:
@@ -364,7 +366,7 @@ class NodriverPublicChecker:
         matched = bool(CLOUDFLARE_TEXT_RE.search(content))
         _log(f"Cloudflare 检测结果：{'命中' if matched else '未命中'}。")
         if matched:
-            await _click_cloudflare_checkbox_if_present(tab)
+            await _click_cloudflare_checkbox_if_present(tab, self._async_sleep)
         return matched
 
     async def _wait_until_cloudflare_cleared(self, tab) -> None:
@@ -425,23 +427,43 @@ def _html_to_visible_text(content: str) -> str:
     return html.unescape(without_tags)
 
 
-async def _click_cloudflare_checkbox_if_present(tab) -> None:
+async def _click_cloudflare_checkbox_if_present(
+    tab,
+    async_sleep: Callable[[float], Awaitable[object]] = asyncio.sleep,
+) -> None:
+    _log("正在等待cloudflare页面加载")
     _log("准备查找 Cloudflare checkbox。")
-    await _print_cloudflare_checkbox_page(tab)
-    element = await _first_selected(tab, CLOUDFLARE_CHECKBOX_SELECTORS)
-    if element is None:
-        element = await _first_xpath(tab, CLOUDFLARE_CHECKBOX_XPATHS)
+    element = await _wait_for_cloudflare_checkbox(tab, async_sleep)
     if element is None:
         _log("未找到 Cloudflare checkbox。")
         return
-    _log("找到 Cloudflare checkbox，准备点击。")
 
+    _log("找到 Cloudflare checkbox，准备打印页面。")
+    await _print_cloudflare_checkbox_page(tab)
+    _log("找到 Cloudflare checkbox，准备点击。")
     try:
         await _await_browser_action(element.click(), "点击 Cloudflare checkbox")
         _log("已点击 Cloudflare checkbox。")
     except Exception as exc:
         _log(f"点击 Cloudflare checkbox 异常：{exc}")
         return
+
+
+async def _wait_for_cloudflare_checkbox(
+    tab,
+    async_sleep: Callable[[float], Awaitable[object]],
+):
+    for attempt in range(1, CLOUDFLARE_CHECKBOX_WAIT_ATTEMPTS + 1):
+        _log(f"第 {attempt} 次查找 Cloudflare checkbox。")
+        element = await _first_selected(tab, CLOUDFLARE_CHECKBOX_SELECTORS)
+        if element is None:
+            element = await _first_xpath(tab, CLOUDFLARE_CHECKBOX_XPATHS)
+        if element is not None:
+            return element
+        if attempt < CLOUDFLARE_CHECKBOX_WAIT_ATTEMPTS:
+            _log(f"尚未找到 Cloudflare checkbox，等待 {CLOUDFLARE_CHECKBOX_POLL_SECONDS} 秒后重试。")
+            await async_sleep(CLOUDFLARE_CHECKBOX_POLL_SECONDS)
+    return None
 
 
 async def _print_cloudflare_checkbox_page(tab) -> None:

@@ -164,6 +164,7 @@ class NodriverBrowserTest(unittest.TestCase):
 
         self.assertTrue(detected)
         self.assertTrue(tab.clicked)
+        self.assertIn("正在等待cloudflare页面加载", output.getvalue())
         self.assertIn("准备查找 Cloudflare checkbox。", output.getvalue())
         self.assertIn("找到 Cloudflare checkbox，准备点击。", output.getvalue())
         self.assertIn("===== Cloudflare checkbox 页面 HTML 开始 =====", output.getvalue())
@@ -180,6 +181,8 @@ class NodriverBrowserTest(unittest.TestCase):
         )
         tab = FakeTab(
             "Verify you are human",
+            checkbox_selector='input[type="checkbox"]',
+            checkbox_available_after_select_calls=1,
             dom_snapshot='<iframe src="https://challenges.cloudflare.com"><input type="checkbox" id="shadow-checkbox"></iframe>',
         )
         output = io.StringIO()
@@ -188,6 +191,7 @@ class NodriverBrowserTest(unittest.TestCase):
             detected = asyncio.run(monitor._looks_like_cloudflare(tab))
 
         self.assertTrue(detected)
+        self.assertTrue(tab.clicked)
         self.assertIn("===== Cloudflare checkbox DOM 快照开始 =====", output.getvalue())
         self.assertIn("shadow-checkbox", output.getvalue())
         self.assertIn("===== Cloudflare checkbox DOM 快照结束 =====", output.getvalue())
@@ -211,8 +215,10 @@ class NodriverBrowserTest(unittest.TestCase):
         self.assertIn("准备读取页面可见文本。", output.getvalue())
         self.assertIn("准备读取页面 HTML。", output.getvalue())
         self.assertIn("Cloudflare 检测结果：命中。", output.getvalue())
+        self.assertIn("正在等待cloudflare页面加载", output.getvalue())
         self.assertIn("准备查找 Cloudflare checkbox。", output.getvalue())
         self.assertIn("未找到 Cloudflare checkbox。", output.getvalue())
+        self.assertNotIn("===== Cloudflare checkbox 页面 HTML 开始 =====", output.getvalue())
 
     def test_cloudflare_detection_logs_checkbox_click_exception(self):
         monitor = NodriverMonitor(
@@ -272,7 +278,7 @@ class NodriverBrowserTest(unittest.TestCase):
         result = monitor.run_once()
 
         self.assertTrue(result.ordered)
-        self.assertEqual(sleeps[0], 20)
+        self.assertIn(20, sleeps)
         self.assertEqual(prompts, [])
         self.assertEqual(
             notifier.messages,
@@ -352,15 +358,25 @@ class FakeBrowser:
 
 
 class FakeTab:
-    def __init__(self, content, checkbox_selector=None, visible_text=None, click_error=None, dom_snapshot=None):
+    def __init__(
+        self,
+        content,
+        checkbox_selector=None,
+        visible_text=None,
+        click_error=None,
+        dom_snapshot=None,
+        checkbox_available_after_select_calls=0,
+    ):
         self.content_sequence = list(content) if isinstance(content, list) else None
         self.content = content[0] if isinstance(content, list) else content
         self.checkbox_selector = checkbox_selector
         self.visible_text = visible_text
         self.click_error = click_error
         self.dom_snapshot = dom_snapshot
+        self.checkbox_available_after_select_calls = checkbox_available_after_select_calls
         self.fail_content_on_call = None
         self.content_calls = 0
+        self.select_calls = 0
         self.clicked = False
         self.brought_to_front = False
 
@@ -380,6 +396,9 @@ class FakeTab:
         return None
 
     async def select(self, selector, timeout=1):
+        self.select_calls += 1
+        if self.select_calls <= self.checkbox_available_after_select_calls:
+            return None
         if selector == self.checkbox_selector:
             return FakeElement(self)
         return None
