@@ -112,12 +112,12 @@ TOKEN_REFRESH_AFTER_SECONDS=6600
 
 ## 使用
 
-以下命令在 Windows PowerShell、macOS Terminal、Linux shell 中相同。Windows 如果没有激活虚拟环境，也可以在命令前加 `uv run`，例如 `uv run vmiss-monitor public-check`。
+以下命令在 Windows PowerShell、macOS Terminal、Linux shell 中相同。示例统一使用 `uv run vmiss-monitor ...`，注意中间必须有 `run`；这样即使没有激活虚拟环境，也能在 Windows、macOS、Linux 上运行。若已经激活虚拟环境，也可以省略 `uv run`，直接执行 `vmiss-monitor ...`。
 
 首次使用建议先初始化登录态：
 
 ```bash
-vmiss-monitor login
+uv run vmiss-monitor login
 ```
 
 如果出现 Cloudflare 真人认证，在打开的浏览器中手动完成。登录完成后回到终端按 Enter。
@@ -125,19 +125,19 @@ vmiss-monitor login
 发送测试通知：
 
 ```bash
-vmiss-monitor test-notify
+uv run vmiss-monitor test-notify
 ```
 
 执行一次库存检查：
 
 ```bash
-vmiss-monitor once
+uv run vmiss-monitor once
 ```
 
 只测试公开页面监测是否能定位套餐并判断库存，不登录、不通知、不点击下单：
 
 ```bash
-vmiss-monitor public-check
+uv run vmiss-monitor public-check
 ```
 
 如果该命令提示触发 Cloudflare 真人认证，需要在打开的 Chromium 窗口中手动完成验证；验证通过后命令会继续定位 `VMISS_TARGET_PRODUCT` 指定的套餐并输出库存判断结果。这个命令适合在正式监控前做完整性检查。
@@ -145,7 +145,7 @@ vmiss-monitor public-check
 持续监控：
 
 ```bash
-vmiss-monitor monitor
+uv run vmiss-monitor monitor
 ```
 
 ## Cloudflare 处理

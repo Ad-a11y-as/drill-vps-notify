@@ -1,12 +1,15 @@
 import json
+import io
 import sys
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from vmiss_notify.config import AppConfig
-from vmiss_notify.notifier import MessageApiError, MessageNotifier
+from vmiss_notify.notifier import MessageApiError, MessageNotifier, UrllibJsonTransport
 
 
 class FakeClock:
@@ -25,6 +28,20 @@ class FakeTransport:
     def post_json(self, url, payload, headers=None):
         self.calls.append({"url": url, "payload": payload, "headers": headers or {}})
         return self.responses.pop(0)
+
+
+class FakeResponse:
+    def __init__(self, body):
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return None
+
+    def read(self):
+        return self.body.encode("utf-8")
 
 
 def make_config():
@@ -147,6 +164,30 @@ class MessageNotifierTest(unittest.TestCase):
 
         self.assertIn("123", str(exc_info.exception))
         self.assertIn("bad credentials", str(exc_info.exception))
+
+
+class UrllibJsonTransportLoggingTest(unittest.TestCase):
+    def test_post_json_prints_full_request_and_response(self):
+        transport = UrllibJsonTransport()
+        stdout = io.StringIO()
+
+        with patch(
+            "vmiss_notify.notifier.request.urlopen",
+            return_value=FakeResponse('{"errorCode": 0, "corpAccessToken": "token-1"}'),
+        ):
+            with redirect_stdout(stdout):
+                transport.post_json(
+                    "https://notify.example.com/cgi/corpAccessToken/get/V2?thirdTraceId=trace-1",
+                    {"appId": "app-id", "appSecret": "secret-value", "permanentCode": "perm-value"},
+                    headers={"corpAccessToken": "token-header", "corpId": "corp-1"},
+                )
+
+        output = stdout.getvalue()
+        self.assertIn("https://notify.example.com/cgi/corpAccessToken/get/V2?thirdTraceId=trace-1", output)
+        self.assertIn('"appSecret": "secret-value"', output)
+        self.assertIn('"permanentCode": "perm-value"', output)
+        self.assertIn('"corpAccessToken": "token-header"', output)
+        self.assertIn('"corpAccessToken": "token-1"', output)
 
 
 if __name__ == "__main__":

@@ -66,7 +66,7 @@ class VmissMonitor:
             return self._check_and_order(page)
 
     def monitor_forever(self) -> None:
-        self._notifier.send_text(
+        self._safe_notify(
             f"VMISS 库存监控已启动：{self._config.target_product}，间隔 {self._config.check_interval_seconds} 秒"
         )
         while True:

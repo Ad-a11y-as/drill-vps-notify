@@ -23,9 +23,16 @@ class UrllibJsonTransport:
     def post_json(self, url: str, payload: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:
         body = json.dumps(payload).encode("utf-8")
         request_headers = {"Content-Type": "application/json", **(headers or {})}
+        print(f"Message API request URL: {url}", flush=True)
+        print(
+            f"Message API request headers: {json.dumps(request_headers, ensure_ascii=False)}",
+            flush=True,
+        )
+        print(f"Message API request payload: {json.dumps(payload, ensure_ascii=False)}", flush=True)
         req = request.Request(url, data=body, headers=request_headers, method="POST")
         with request.urlopen(req, timeout=30) as response:
             response_body = response.read().decode("utf-8")
+        print(f"Message API response body: {response_body}", flush=True)
         return json.loads(response_body)
 
 
